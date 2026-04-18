@@ -389,23 +389,35 @@ function renderAdsTab(data, pdv) {
   })
   const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
-    <optgroup label="${y}">
-      ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">${monthNames[m]} ${y}</option>`).join('')}
-    </optgroup>`).join('')
+    <option value="year-${y}">${y} — Toute l'année</option>
+    ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">↳ ${monthNames[m]}</option>`).join('')}
+  `).join('')
+
+  // Label période lisible
+  let periodLabel2 = '30 derniers jours'
+  if(currentPeriod==='max') periodLabel2 = 'Toute la période'
+  else if(currentPeriod.startsWith('year-')) periodLabel2 = currentPeriod.replace('year-','') + ' — Toute l\'année'
+  else if(currentPeriod.includes('-') && !currentPeriod.startsWith('year-')) {
+    const [fy,fm] = currentPeriod.split('-').map(Number)
+    periodLabel2 = `${monthNames[fm]} ${fy}`
+  }
 
   const periodSelector = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--tx2)">Période :</span>
     <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
     <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
     <select style="font-size:12px;padding:4px 8px;width:auto" onchange="if(this.value){changePeriod('${pdv.id}',this.value);this.value=''}">
-      <option value="">Par mois...</option>
+      <option value="">Filtrer par période...</option>
       ${yearOpts}
     </select>
   </div>`
 
-  // Filtrer les données si période mois/année sélectionnée
+  // Filtrer les données selon la période
   let filtered = allData
-  if(currentPeriod!=='30d' && currentPeriod!=='max' && currentPeriod.includes('-')) {
+  if(currentPeriod.startsWith('year-')) {
+    const fy = parseInt(currentPeriod.replace('year-',''))
+    filtered = allData.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
+  } else if(currentPeriod!=='30d' && currentPeriod!=='max' && currentPeriod.includes('-')) {
     const [fy, fm] = currentPeriod.split('-').map(Number)
     filtered = allData.filter(r => {
       if(!r.date_start) return false
@@ -428,7 +440,7 @@ function renderAdsTab(data, pdv) {
   return `
     ${periodSelector}
     <div class="kgrid" style="margin-bottom:1.25rem">
-      <div class="kc"><div class="kl">Budget dépensé (${periodLabel})</div><div class="kv">${fmtE(totalSpend)}</div></div>
+      <div class="kc"><div class="kl">Budget dépensé (${periodLabel2})</div><div class="kv">${fmtE(totalSpend)}</div></div>
       <div class="kc"><div class="kl">Couverture totale</div><div class="kv">${fmt(totalReach)}</div></div>
       <div class="kc"><div class="kl">Impressions</div><div class="kv">${fmt(totalImpr)}</div></div>
       <div class="kc"><div class="kl">Réactions</div><div class="kv">${fmt(totalReact)}</div></div>
@@ -444,7 +456,7 @@ function renderAdsTab(data, pdv) {
           <div class="chart-wrap" style="height:200px"><canvas id="ads-chart" role="img" aria-label="Budget et couverture par publication">Données publicitaires.</canvas></div>
         </div>
         <div class="card">
-          <div class="ct">Détail des publications boostées — ${periodLabel}</div>
+          <div class="ct">Détail des publications boostées — ${periodLabel2}</div>
           <div class="tbl-wrap"><table class="t">
             <thead><tr><th>Plateforme</th><th style="min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
             <tbody>${(()=>{
