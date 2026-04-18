@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RS Franchise — Suivi performances</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f7f5;--bg2:#fff;--bg3:#f0eeea;--bg4:#e8e6e1;
+  --tx:#1a1a1a;--tx2:#666;--tx3:#999;
+  --bd:rgba(0,0,0,0.1);--bd2:rgba(0,0,0,0.18);
+  --green:#1D9E75;--green-bg:#EAF3DE;--green-tx:#27500A;
+  --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-tx:#633806;
+  --red:#E24B4A;--red-bg:#FCEBEB;--red-tx:#791F1F;
+  --blue:#378ADD;--blue-bg:#E6F1FB;--blue-tx:#0C447C;
+  --r:8px;--rl:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1c1c1a;--bg2:#252523;--bg3:#2a2a28;--bg4:#333330;
+  --tx:#f0eeea;--tx2:#aaa;--tx3:#666;--bd:rgba(255,255,255,0.1);--bd2:rgba(255,255,255,0.18);
+  --green-bg:#085041;--green-tx:#9FE1CB;--amber-bg:#633806;--amber-tx:#FAC775;
+  --red-bg:#501313;--red-tx:#F7C1C1;--blue-bg:#042C53;--blue-tx:#B5D4F4;
+}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--bg2);border-right:0.5px solid var(--bd);padding:1rem;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.logo{font-size:15px;font-weight:600;padding-bottom:1rem;border-bottom:0.5px solid var(--bd);margin-bottom:.5rem}
+.logo small{font-size:11px;font-weight:400;color:var(--tx2);display:block;margin-top:2px}
+.ns{font-size:10px;color:var(--tx3);padding:10px 10px 4px;text-transform:uppercase;letter-spacing:.06em}
+.ni{padding:7px 10px;border-radius:var(--r);font-size:13px;cursor:pointer;color:var(--tx2)}
+.ni:hover{background:var(--bg3)}
+.ni.active{background:var(--bg3);color:var(--tx);font-weight:500}
+.pdv-item{padding:6px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdv-item:hover{background:var(--bg3)}
+.pdv-item.active{background:var(--bg3);color:var(--tx);font-weight:500}
+.sdot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.main{flex:1;padding:1.5rem;overflow-y:auto;display:flex;flex-direction:column;gap:1.25rem;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.topbar h1{font-size:18px;font-weight:600}
+.card{background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:1.25rem}
+.ct{font-size:13px;font-weight:600;margin-bottom:1rem}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kc{background:var(--bg3);border-radius:var(--r);padding:.9rem}
+.kl{font-size:11px;color:var(--tx2);margin-bottom:4px}
+.kv{font-size:21px;font-weight:600;color:var(--tx)}
+.ks{font-size:11px;color:var(--tx3);margin-top:3px}
+.badge{display:inline-block;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:500}
+.bg{background:var(--green-bg);color:var(--green-tx)}
+.ba{background:var(--amber-bg);color:var(--amber-tx)}
+.br{background:var(--red-bg);color:var(--red-tx)}
+.bb{background:var(--blue-bg);color:var(--blue-tx)}
+.fl{display:flex;flex-direction:column;gap:10px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:11px;color:var(--tx2);display:block;margin-bottom:3px}
+input,select,textarea{font-size:13px;width:100%;padding:7px 9px;border:0.5px solid var(--bd2);border-radius:var(--r);background:var(--bg2);color:var(--tx);outline:none}
+input:focus,select:focus{border-color:var(--blue)}
+textarea{resize:vertical;min-height:60px}
+.btn{font-size:12px;padding:7px 14px;border-radius:var(--r);border:0.5px solid var(--bd2);background:transparent;color:var(--tx);cursor:pointer;font-weight:500}
+.btn:hover{background:var(--bg3)}
+.btn-primary{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-primary:hover{opacity:.9}
+.btn-danger{color:var(--red);border-color:var(--red-bg)}
+.btn-sm{font-size:11px;padding:4px 10px}
+.tabs{display:flex;gap:4px;margin-bottom:1rem}
+.tab{font-size:12px;padding:5px 12px;border-radius:var(--r);cursor:pointer;border:0.5px solid transparent;color:var(--tx2)}
+.tab.active{border-color:var(--bd2);background:var(--bg3);color:var(--tx);font-weight:500}
+.sep{height:0.5px;background:var(--bd);margin:.75rem 0}
+.row{display:flex;gap:1.25rem;align-items:flex-start;flex-wrap:wrap}
+.tbl-wrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:12px}
+table.t th{text-align:left;font-size:11px;font-weight:500;color:var(--tx2);padding:0 8px 8px;border-bottom:0.5px solid var(--bd);white-space:nowrap}
+table.t td{padding:9px 8px;border-bottom:0.5px solid var(--bd);color:var(--tx);vertical-align:middle}
+table.t tr:last-child td{border-bottom:none}
+table.t tr:hover td{background:var(--bg3)}
+.empty{font-size:13px;color:var(--tx2);padding:.5rem 0}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.info-box{background:var(--blue-bg);color:var(--blue-tx);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;line-height:1.6}
+.warn-box{background:var(--amber-bg);color:var(--amber-tx);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;line-height:1.6}
+.chart-wrap{position:relative;width:100%}
+.token-field{font-family:monospace;font-size:11px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="logo">RS Franchise<small>My Beers — Suivi RS</small></div>
+    <div class="ns">Navigation</div>
+    <div class="ni active" data-v="accueil">Accueil</div>
+    <div class="ni" data-v="config">Gérer les établissements</div>
+    <div class="ns">Établissements</div>
+    <div id="pdv-list"></div>
+  </div>
+  <div class="main" id="main"></div>
+</div>
+<script>
+// ── STORAGE ────────────────────────────────────────────────────────────────
+const DB = {
+  get cfg(){ try{ return JSON.parse(localStorage.getItem('rsf_cfg')||'[]') }catch(e){ return [] } },
+  set cfg(v){ localStorage.setItem('rsf_cfg', JSON.stringify(v)) },
+  getCache(id,t){ try{ const r=JSON.parse(localStorage.getItem(`rsf_c_${id}_${t}`)||'null'); if(!r) return null; if(Date.now()-r.ts > 7*86400000) return null; return r.d }catch(e){ return null } },
+  setCache(id,t,d){ localStorage.setItem(`rsf_c_${id}_${t}`, JSON.stringify({ts:Date.now(),d})) },
+  clearCache(id){ Object.keys(localStorage).filter(k=>k.startsWith(`rsf_c_${id}`)).forEach(k=>localStorage.removeItem(k)) }
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+const fmt = n => (isNaN(n)||n===null||n===undefined) ? '—' : Number(n).toLocaleString('fr-FR')
+const fmtE = n => (isNaN(n)||!n) ? '—' : Number(n).toFixed(2)+' €'
+const fmtD = s => s ? new Date(s).toLocaleDateString('fr-FR') : '—'
+const getAction = (actions, type) => { const a=(actions||[]).find(x=>x.action_type===type); return a ? parseInt(a.value)||0 : 0 }
+
+async function fetchMeta(endpoint, token) {
+  const r = await fetch(`https://graph.facebook.com/v25.0/${endpoint}${endpoint.includes('?')?'&':'?'}access_token=${token}`)
+  const j = await r.json()
+  if(j.error) throw new Error(j.error.message)
+  return j
+}
+
+// ── SIDEBAR ────────────────────────────────────────────────────────────────
+function buildSidebar(activePdv) {
+  const cfg = DB.cfg
+  const el = document.getElementById('pdv-list')
+  if(!cfg.length){ el.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Aucun établissement</div>'; return }
+  el.innerHTML = cfg.map(p => {
+    const ok = p.fb_token && p.ad_account_id
+    const dot = ok ? 'status-ok' : 'status-warn'
+    return `<div class="pdv-item${activePdv===p.id?' active':''}" data-pdv="${p.id}" onclick="navPDV('${p.id}')">
+      <span class="sdot" style="background:${ok?'var(--green)':'var(--amber)'}"></span>${p.nom}
+    </div>`
+  }).join('')
+}
+
+// ── NAV ────────────────────────────────────────────────────────────────────
+function nav(v) {
+  document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.toggle('active',e.dataset.v===v))
+  document.querySelectorAll('.pdv-item').forEach(e=>e.classList.remove('active'))
+  if(v==='accueil') renderAccueil()
+  else if(v==='config') renderConfig()
+}
+function navPDV(id) {
+  document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.remove('active'))
+  document.querySelectorAll('.pdv-item').forEach(e=>e.classList.toggle('active',e.dataset.pdv===id))
+  buildSidebar(id)
+  renderDash(id, false)
+}
+document.querySelectorAll('.ni[data-v]').forEach(el=>el.addEventListener('click',()=>nav(el.dataset.v)))
+
+// ── ACCUEIL ────────────────────────────────────────────────────────────────
+function renderAccueil() {
+  const cfg = DB.cfg
+  document.getElementById('main').innerHTML = `
+    <div class="topbar"><h1>Tableau de bord réseau</h1></div>
+    <div class="kgrid">
+      <div class="kc"><div class="kl">Établissements configurés</div><div class="kv">${cfg.length}<span style="font-size:13px;color:var(--tx2)"> / 50</span></div></div>
+      <div class="kc"><div class="kl">Accès complets</div><div class="kv" style="color:var(--green)">${cfg.filter(p=>p.fb_token&&p.ad_account_id).length}</div><div class="ks">Meta + compte pub</div></div>
+      <div class="kc"><div class="kl">Accès partiels</div><div class="kv" style="color:var(--amber)">${cfg.filter(p=>p.fb_token&&!p.ad_account_id).length}</div><div class="ks">Page seulement</div></div>
+      <div class="kc"><div class="kl">Non configurés</div><div class="kv" style="color:var(--tx3)">${50-cfg.length}</div></div>
+    </div>
+    ${cfg.length===0?`<div class="card"><div class="info-box"><strong>Bienvenue !</strong> Commencez par ajouter vos établissements via <strong>"Gérer les établissements"</strong>.</div></div>`:''}
+    <div class="card">
+      <div class="ct">État des accès</div>
+      ${cfg.length===0?'<p class="empty">Aucun établissement configuré.</p>':`
+      <div class="tbl-wrap"><table class="t">
+        <thead><tr><th>Établissement</th><th>Ville</th><th>Page Facebook</th><th>Compte pub (Ads)</th><th>GMB</th></tr></thead>
+        <tbody>${cfg.map(p=>`<tr style="cursor:pointer" onclick="navPDV('${p.id}')">
+          <td><strong>${p.nom}</strong></td>
+          <td>${p.ville||'—'}</td>
+          <td>${p.fb_page_id&&p.fb_token?'<span class="badge bg">OK</span>':'<span class="badge br">Manquant</span>'}</td>
+          <td>${p.ad_account_id?'<span class="badge bg">OK</span>':'<span class="badge ba">Non configuré</span>'}</td>
+          <td>${p.gmb_place_id?'<span class="badge bg">OK</span>':'<span class="badge ba">Non configuré</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`}
+    </div>`
+}
+
+// ── CONFIG ─────────────────────────────────────────────────────────────────
+function renderConfig(editId) {
+  const cfg = DB.cfg
+  document.getElementById('main').innerHTML = `
+    <div class="topbar"><h1>Gérer les établissements</h1>
+      <button class="btn btn-primary" onclick="showForm()">+ Ajouter</button>
+    </div>
+    <div id="form-zone"></div>
+    ${cfg.length===0?'<div class="card"><p class="empty">Aucun établissement.</p></div>':`
+    <div class="card">
+      <div class="tbl-wrap"><table class="t">
+        <thead><tr><th>Nom</th><th>Ville</th><th>Page ID FB</th><th>Ad Account</th><th>Token</th><th>GMB Place ID</th><th></th></tr></thead>
+        <tbody>${cfg.map(p=>`<tr>
+          <td><strong>${p.nom}</strong></td>
+          <td>${p.ville||'—'}</td>
+          <td style="font-family:monospace;font-size:11px">${p.fb_page_id||'—'}</td>
+          <td style="font-family:monospace;font-size:11px">${p.ad_account_id||'—'}</td>
+          <td>${p.fb_token?'<span class="badge bg">Défini</span>':'<span class="badge br">Manquant</span>'}</td>
+          <td style="font-family:monospace;font-size:11px">${p.gmb_place_id||'—'}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm" onclick="showForm('${p.id}')">Modifier</button>
+            <button class="btn btn-sm btn-danger" onclick="deletePDV('${p.id}')">Suppr.</button>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`}
+  `
+  if(editId) showForm(editId)
+}
+
+function showForm(id) {
+  const p = id ? DB.cfg.find(x=>x.id===id) : null
+  document.getElementById('form-zone').innerHTML = `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="ct">${p?`Modifier — ${p.nom}`:'Nouvel établissement'}</div>
+      <div class="fg2" style="gap:10px;margin-bottom:10px">
+        <div><label>Nom *</label><input id="cf-nom" value="${p?.nom||''}" placeholder="Ex : My Beers Poitiers"></div>
+        <div><label>Ville</label><input id="cf-ville" value="${p?.ville||''}" placeholder="Ex : Poitiers"></div>
+      </div>
+      <div class="sep"></div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Facebook / Meta</div>
+      <div class="fg2" style="gap:10px;margin-bottom:10px">
+        <div><label>Page ID Facebook</label><input id="cf-fbid" value="${p?.fb_page_id||''}" placeholder="Ex : 609686032238115"></div>
+        <div><label>ID compte publicitaire</label><input id="cf-adid" value="${p?.ad_account_id||''}" placeholder="Ex : act_346792040096064"></div>
+      </div>
+      <div style="margin-bottom:10px"><label>Token d'accès Meta (longue durée)</label><input id="cf-token" class="token-field" value="${p?.fb_token||''}" placeholder="EAAZCDhr..."></div>
+      <div class="sep"></div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Google My Business</div>
+      <div class="fg2" style="gap:10px">
+        <div><label>Place ID Google</label><input id="cf-gmbid" value="${p?.gmb_place_id||''}" placeholder="Ex : ChIJxxxxxxxx"></div>
+        <div><label>Clé API Google (optionnel)</label><input id="cf-gmbkey" value="${p?.gmb_api_key||''}" placeholder="AIzaSy..."></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
+        <button class="btn" onclick="renderConfig()">Annuler</button>
+        <button class="btn btn-primary" onclick="savePDV('${id||''}')">Enregistrer</button>
+      </div>
+      <div id="cf-msg" style="font-size:12px;margin-top:6px;color:var(--red)"></div>
+    </div>`
+}
+
+function savePDV(existingId) {
+  const nom = document.getElementById('cf-nom').value.trim()
+  if(!nom){ document.getElementById('cf-msg').textContent='Le nom est obligatoire.'; return }
+  const cfg = DB.cfg
+  const obj = {
+    nom, ville: document.getElementById('cf-ville').value.trim(),
+    fb_page_id: document.getElementById('cf-fbid').value.trim(),
+    ad_account_id: document.getElementById('cf-adid').value.trim(),
+    fb_token: document.getElementById('cf-token').value.trim(),
+    gmb_place_id: document.getElementById('cf-gmbid').value.trim(),
+    gmb_api_key: document.getElementById('cf-gmbkey').value.trim()
+  }
+  if(existingId){ const i=cfg.findIndex(x=>x.id===existingId); if(i!==-1){ cfg[i]={...cfg[i],...obj}; DB.clearCache(existingId) } }
+  else { obj.id='pdv_'+Date.now(); cfg.push(obj) }
+  DB.cfg=cfg; buildSidebar(null); renderConfig()
+}
+
+function deletePDV(id) {
+  if(!confirm('Supprimer cet établissement ?')) return
+  DB.cfg=DB.cfg.filter(x=>x.id!==id); DB.clearCache(id); buildSidebar(null); renderConfig()
+}
+
+// ── LOAD DATA ──────────────────────────────────────────────────────────────
+async function loadAds(pdv, force, period) {
+  if(!pdv.ad_account_id || !pdv.fb_token) return null
+  const cacheKey = 'ads_' + (period||'30d')
+  if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
+  try {
+    // 1. Récupérer toutes les campagnes avec noms et dates réelles
+    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status&limit=100`
+    while(curl) {
+      const d = await fetchMeta(curl, pdv.fb_token)
+      campaigns = campaigns.concat(d.data||[])
+      curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+      if(campaigns.length > 500) break
+    }
+    const campMap = {}
+    campaigns.forEach(c=>{ campMap[c.id] = c })
+
+    // 2. Récupérer les insights avec campaign_id
+    const preset = period==='max' ? 'maximum' : 'last_30d'
+    let insights=[], iurl=`${pdv.ad_account_id}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
+    while(iurl) {
+      const d = await fetchMeta(iurl, pdv.fb_token)
+      insights = insights.concat(d.data||[])
+      iurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+      if(insights.length > 300) break
+    }
+
+    // 3. Croiser les deux
+    const merged = insights.map(r => {
+      const camp = campMap[r.campaign_id] || {}
+      return {
+        ...r,
+        campaign_name: camp.name || r.campaign_id || '—',
+        date_start: camp.start_time ? camp.start_time.split('T')[0] : null,
+        date_stop: camp.stop_time ? camp.stop_time.split('T')[0] : null,
+        status: camp.status || '—'
+      }
+    })
+    DB.setCache(pdv.id, cacheKey, merged); return merged
+  } catch(e){ return {error:e.message} }
+}
+
+async function loadPage(pdv, force) {
+  if(!pdv.fb_page_id || !pdv.fb_token) return null
+  if(!force){ const c=DB.getCache(pdv.id,'page'); if(c) return c }
+  try {
+    const d = await fetchMeta(`${pdv.fb_page_id}?fields=name,fan_count,followers_count`, pdv.fb_token)
+    DB.setCache(pdv.id,'page',d); return d
+  } catch(e){ return {error:e.message} }
+}
+
+async function loadGMB(pdv, force) {
+  if(!pdv.gmb_place_id || !pdv.gmb_api_key) return null
+  if(!force){ const c=DB.getCache(pdv.id,'gmb'); if(c) return c }
+  try {
+    const r = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${pdv.gmb_place_id}&fields=name,rating,user_ratings_total,reviews&key=${pdv.gmb_api_key}`)
+    const j = await r.json()
+    if(j.status!=='OK') throw new Error(j.status)
+    DB.setCache(pdv.id,'gmb',j.result); return j.result
+  } catch(e){ return {error:e.message} }
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────────────────
+let charts = {}
+let currentPeriod = '30d'
+
+async function renderDash(pdvId, force, period) {
+  const pdv = DB.cfg.find(x=>x.id===pdvId)
+  if(!pdv) return
+  if(period) currentPeriod = period
+  Object.values(charts).forEach(c=>{ try{c.destroy()}catch(e){} }); charts={}
+
+  document.getElementById('main').innerHTML = `
+    <div class="topbar">
+      <h1>${pdv.nom}${pdv.ville?` <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${pdv.ville}</span>`:''}
+      </h1>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="cache-ts" style="font-size:11px;color:var(--tx3)"></span>
+        <button class="btn" onclick="renderDash('${pdvId}',true)">Actualiser</button>
+        <button class="btn" onclick="showForm('${pdvId}');nav('config')">Configurer</button>
+      </div>
+    </div>
+    <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
+
+  const [ads, page, gmb] = await Promise.all([loadAds(pdv,force,currentPeriod), loadPage(pdv,force), loadGMB(pdv,force)])
+
+  const ts = DB.getCache(pdvId,'ads_'+currentPeriod)
+  const cEl = document.getElementById('cache-ts')
+  if(cEl && ts) cEl.textContent = `Mis à jour le ${new Date(DB.getCache(pdvId,'ads')?.ts||Date.now()).toLocaleDateString('fr-FR')}`
+
+  const body = document.getElementById('dash-body')
+  if(!body) return
+
+  body.innerHTML = `
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(this,'t-ads')">Publications boostées</div>
+      <div class="tab" onclick="showTab(this,'t-page')">Page Facebook</div>
+      ${pdv.gmb_place_id?'<div class="tab" onclick="showTab(this,\'t-gmb\')">Google My Business</div>':''}
+    </div>
+    <div id="t-ads">${renderAdsTab(ads, pdv)}</div>
+    <div id="t-page" style="display:none">${renderPageTab(page, pdv)}</div>
+    ${pdv.gmb_place_id?`<div id="t-gmb" style="display:none">${renderGMBTab(gmb, pdv)}</div>`:''}
+  `
+  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(ads) }, 100)
+}
+
+function showTab(el, id) {
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active')
+  ;['t-ads','t-page','t-gmb'].forEach(i=>{ const e=document.getElementById(i); if(e) e.style.display=i===id?'block':'none' })
+}
+
+// ── TAB ADS ────────────────────────────────────────────────────────────────
+function renderAdsTab(data, pdv) {
+  if(!pdv.ad_account_id||!pdv.fb_token) return `<div class="card"><div class="warn-box">Compte publicitaire non configuré.<br><strong>→ Ajoutez l'ID du compte pub (format act_XXXXXXXXX) dans la configuration.</strong></div></div>`
+  if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
+  if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
+
+  const periodLabel = currentPeriod==='max' ? 'Toute la période' : currentPeriod==='30d' ? '30 derniers jours' : currentPeriod
+
+  // Construire les options année/mois depuis les données
+  const allData = data
+  const yearMonths = {}
+  allData.forEach(r => {
+    if(!r.date_start) return
+    const d = new Date(r.date_start)
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    if(!yearMonths[y]) yearMonths[y]=new Set()
+    yearMonths[y].add(m)
+  })
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
+    <optgroup label="${y}">
+      ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">${monthNames[m]} ${y}</option>`).join('')}
+    </optgroup>`).join('')
+
+  const periodSelector = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--tx2)">Période :</span>
+    <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
+    <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
+    <select style="font-size:12px;padding:4px 8px;width:auto" onchange="if(this.value){changePeriod('${pdv.id}',this.value);this.value=''}">
+      <option value="">Par mois...</option>
+      ${yearOpts}
+    </select>
+  </div>`
+
+  // Filtrer les données si période mois/année sélectionnée
+  let filtered = allData
+  if(currentPeriod!=='30d' && currentPeriod!=='max' && currentPeriod.includes('-')) {
+    const [fy, fm] = currentPeriod.split('-').map(Number)
+    filtered = allData.filter(r => {
+      if(!r.date_start) return false
+      const d = new Date(r.date_start)
+      return d.getFullYear()===fy && d.getMonth()===fm
+    })
+  }
+
+  if(!filtered.length) return periodSelector + `<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
+
+  const totalSpend = filtered.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
+  const totalReach = filtered.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
+  const totalImpr = filtered.reduce((a,r)=>a+(parseInt(r.impressions)||0),0)
+  const totalReact = filtered.reduce((a,r)=>a+getAction(r.actions,'post_reaction'),0)
+  const totalEng = filtered.reduce((a,r)=>a+getAction(r.actions,'post_engagement'),0)
+  const totalShares = filtered.reduce((a,r)=>a+getAction(r.actions,'post'),0)
+  const cpm = totalImpr>0 ? (totalSpend/totalImpr*1000) : 0
+  const cpr = totalReach>0 ? (totalSpend/totalReach*1000) : 0
+
+  return `
+    ${periodSelector}
+    <div class="kgrid" style="margin-bottom:1.25rem">
+      <div class="kc"><div class="kl">Budget dépensé (${periodLabel})</div><div class="kv">${fmtE(totalSpend)}</div></div>
+      <div class="kc"><div class="kl">Couverture totale</div><div class="kv">${fmt(totalReach)}</div></div>
+      <div class="kc"><div class="kl">Impressions</div><div class="kv">${fmt(totalImpr)}</div></div>
+      <div class="kc"><div class="kl">Réactions</div><div class="kv">${fmt(totalReact)}</div></div>
+      <div class="kc"><div class="kl">Engagements</div><div class="kv">${fmt(totalEng)}</div></div>
+      <div class="kc"><div class="kl">Partages</div><div class="kv">${fmt(totalShares)}</div></div>
+      <div class="kc"><div class="kl">CPM</div><div class="kv">${fmtE(cpm)}</div></div>
+      <div class="kc"><div class="kl">CPR (coût/1000 atteints)</div><div class="kv">${fmtE(cpr)}</div></div>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0">
+        <div class="card" style="margin-bottom:1.25rem">
+          <div class="ct">Évolution budget & couverture par publication</div>
+          <div class="chart-wrap" style="height:200px"><canvas id="ads-chart" role="img" aria-label="Budget et couverture par publication">Données publicitaires.</canvas></div>
+        </div>
+        <div class="card">
+          <div class="ct">Détail des publications boostées — ${periodLabel}</div>
+          <div class="tbl-wrap"><table class="t">
+            <thead><tr><th>Plateforme</th><th style="min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
+            <tbody>${(()=>{
+              const normalizeUnicode = s => {
+                const ranges = [
+                  [0x1D400,0x1D419,65],[0x1D41A,0x1D433,97],
+                  [0x1D434,0x1D44D,65],[0x1D44E,0x1D467,97],
+                  [0x1D468,0x1D481,65],[0x1D482,0x1D49B,97],
+                  [0x1D49C,0x1D4B5,65],[0x1D4B6,0x1D4CF,97],
+                  [0x1D4D0,0x1D4E9,65],[0x1D4EA,0x1D503,97],
+                  [0x1D504,0x1D51D,65],[0x1D51E,0x1D537,97],
+                  [0x1D538,0x1D551,65],[0x1D552,0x1D56B,97],
+                  [0x1D56C,0x1D585,65],[0x1D586,0x1D59F,97],
+                  [0x1D5A0,0x1D5B9,65],[0x1D5BA,0x1D5D3,97],
+                  [0x1D5D4,0x1D5ED,65],[0x1D5EE,0x1D607,97],
+                  [0x1D608,0x1D621,65],[0x1D622,0x1D63B,97],
+                  [0x1D63C,0x1D655,65],[0x1D656,0x1D66F,97],
+                  [0x1D670,0x1D689,65],[0x1D68A,0x1D6A3,97],
+                ]
+                return s.normalize('NFKD').replace(/[\u{1D400}-\u{1D7FF}]/gu, c => {
+                  const cp = c.codePointAt(0)
+                  for(const [start,end,base] of ranges) { if(cp>=start&&cp<=end) return String.fromCharCode(cp-start+base) }
+                  return c
+                })
+              }
+              const typeDefs = [
+                {label:'Apéro Quiz', keys:['apéro quiz','apero quiz','quiz','mardi']},
+                {label:'Apéro Concert', keys:['apéro concert','apero concert','concert']},
+                {label:'Fléchettes', keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl']},
+                {label:'Karaoke', keys:['karaoké','karaoke']},
+                {label:'SBK', keys:['sbk']},
+                {label:'Club Mix', keys:['club mix']},
+                {label:'Crush', keys:['crush']},
+                {label:'Beer Pong', keys:['beer pong','pong','championnat']},
+                {label:'Sport', keys:['vs ','versus','match','foot','rugby']},
+              ]
+              const typeColors = {'Apéro Quiz':'bb','Apéro Concert':'bg','Fléchettes':'ba','Karaoke':'br','SBK':'bb','Club Mix':'bg','Crush':'br','Beer Pong':'bg','Sport':'bg','Soirée':'ba','Divers':''}
+
+              const rows = filtered.map(r => {
+                const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
+                const isFriday = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
+                const found = typeDefs.find(t=>t.keys.some(k=>n.includes(k)))
+                const type = found ? found.label : isFriday ? 'Soirée' : 'Divers'
+                return {...r, _type: type}
+              })
+
+              // 2ème passage : héritage par période pour les "Divers"
+              const periodTypeMap = {}
+              rows.forEach(r => { if(r._type!=='Divers' && r.date_start && r.date_stop) { const key=r.date_start+'_'+r.date_stop; periodTypeMap[key]=r._type } })
+              rows.forEach(r => { if(r._type==='Divers' && r.date_start && r.date_stop) { const key=r.date_start+'_'+r.date_stop; if(periodTypeMap[key]) r._type=periodTypeMap[key] } })
+
+              return rows.map(r => {
+                const isIG = r.campaign_name&&r.campaign_name.toLowerCase().includes('instagram')
+                const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,50)
+                const type = r._type
+                const tc = typeColors[type]||''
+                const objMap = {
+                'OUTCOME_ENGAGEMENT':'Interaction',
+                'OUTCOME_AWARENESS':'Notoriété',
+                'LINK_CLICKS':'Trafic',
+                'OUTCOME_TRAFFIC':'Trafic',
+                'MESSAGES':'Messages',
+                'REACH':'Couverture',
+                'EVENT_RESPONSES':'Événement'
+              }
+              const objLabel = objMap[r.objective] || r.objective || '—'
+              const resultMap = {
+                'OUTCOME_ENGAGEMENT': getAction(r.actions,'post_engagement'),
+                'LINK_CLICKS': getAction(r.actions,'link_click'),
+                'OUTCOME_TRAFFIC': getAction(r.actions,'link_click'),
+                'MESSAGES': getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),
+                'REACH': parseInt(r.reach)||0,
+                'EVENT_RESPONSES': getAction(r.actions,'rsvp'),
+                'OUTCOME_AWARENESS': parseInt(r.reach)||0
+              }
+              const resultVal = resultMap[r.objective] !== undefined ? resultMap[r.objective] : '—'
+              // Calcul durée en jours
+              const duree = r.date_start && r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(1000*60*60*24)) : '—'
+              return `<tr>
+                <td><span class="badge ${isIG?'bb':'bg'}">${isIG?'Instagram':'Facebook'}</span></td>
+                <td title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
+                <td>${tc?`<span class="badge ${tc}">${type}</span>`:type}</td>
+                <td style="white-space:nowrap">${fmtD(r.date_start)}</td>
+                <td style="white-space:nowrap">${fmtD(r.date_stop)}</td>
+                <td style="text-align:center">${duree}${duree!=='—'?'j':''}</td>
+                <td>${fmt(r.reach)}</td>
+                <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
+                <td style="white-space:nowrap;font-weight:500">${fmtE(r.spend)}</td>
+                <td><span class="badge ba">${objLabel}</span></td>
+                <td style="font-weight:500">${fmt(resultVal)}</td>
+                <td>${fmt(getAction(r.actions,'post'))}</td>
+                <td>${fmt(getAction(r.actions,'post_reaction'))}</td>
+              </tr>`
+              }).join('')
+            })()} </tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>`
+}
+
+function drawAdsChart(data) {
+  const ctx = document.getElementById('ads-chart'); if(!ctx) return
+  const top = data.slice(0,12)
+  const labels = top.map(r=>{
+    const n=(r.campaign_name||'').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').trim()
+    return n.substring(0,20)+(n.length>20?'…':'')
+  })
+  if(charts['ads']) charts['ads'].destroy()
+  charts['ads'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Budget (€)',data:top.map(r=>parseFloat(r.spend)||0),backgroundColor:'rgba(55,138,221,0.7)',yAxisID:'y'},
+        {label:'Couverture',data:top.map(r=>parseInt(r.reach)||0),type:'line',borderColor:'#1D9E75',backgroundColor:'transparent',yAxisID:'y2',tension:0.3,pointRadius:3}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:9},maxRotation:45,autoSkip:false},grid:{display:false}},
+        y:{ticks:{font:{size:10},callback:v=>v+'€'},grid:{color:'rgba(128,128,128,0.1)'},position:'left'},
+        y2:{ticks:{font:{size:10},callback:v=>fmt(v)},position:'right',grid:{display:false}}
+      }
+    }
+  })
+}
+
+// ── TAB PAGE ───────────────────────────────────────────────────────────────
+function renderPageTab(data, pdv) {
+  if(!pdv.fb_page_id||!pdv.fb_token) return `<div class="card"><div class="warn-box">Page Facebook non configurée.</div></div>`
+  if(!data) return `<div class="card"><p class="empty">Aucune donnée page.</p></div>`
+  if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur :</strong> ${data.error}</div></div>`
+  return `
+    <div class="kgrid">
+      <div class="kc"><div class="kl">Abonnés (fans)</div><div class="kv">${fmt(data.fan_count)}</div></div>
+      <div class="kc"><div class="kl">Followers</div><div class="kv">${fmt(data.followers_count)}</div></div>
+      <div class="kc"><div class="kl">Nom de la page</div><div class="kv" style="font-size:14px">${data.name||'—'}</div></div>
+    </div>
+    <div class="card" style="margin-top:1rem">
+      <div class="info-box">Les publications organiques (posts, stories, engagement) nécessitent une validation Meta supplémentaire. Seules les métriques de la page sont disponibles pour l'instant.</div>
+    </div>`
+}
+
+// ── TAB GMB ────────────────────────────────────────────────────────────────
+function renderGMBTab(data, pdv) {
+  if(!pdv.gmb_place_id) return `<div class="card"><div class="warn-box">Place ID Google non configuré.</div></div>`
+  if(!pdv.gmb_api_key) return `<div class="card"><div class="warn-box">Clé API Google manquante. Ajoutez-la dans la configuration pour accéder aux données GMB.</div></div>`
+  if(!data) return `<div class="card"><p class="empty">Aucune donnée GMB.</p></div>`
+  if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur Google :</strong> ${data.error}</div></div>`
+  const reviews = data.reviews||[]
+  return `
+    <div class="kgrid" style="margin-bottom:1.25rem">
+      <div class="kc"><div class="kl">Note moyenne</div><div class="kv">${data.rating?data.rating.toFixed(1)+' / 5':'—'}</div></div>
+      <div class="kc"><div class="kl">Nombre d'avis</div><div class="kv">${fmt(data.user_ratings_total)}</div></div>
+      <div class="kc"><div class="kl">Avis sans réponse</div><div class="kv" style="color:var(--red)">${reviews.filter(r=>!r.reviewReply).length}</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">Avis récents</div>
+      ${reviews.length===0?'<p class="empty">Aucun avis.</p>':
+      reviews.slice(0,8).map(r=>{
+        const stars='★'.repeat({'ONE':1,'TWO':2,'THREE':3,'FOUR':4,'FIVE':5}[r.rating]||0)+'☆'.repeat(5-({'ONE':1,'TWO':2,'THREE':3,'FOUR':4,'FIVE':5}[r.rating]||0))
+        const replied=!!r.reviewReply
+        return `<div style="padding:10px;border-radius:var(--r);border:0.5px solid var(--bd);background:var(--bg3);margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:13px;font-weight:500">${r.authorAttribution?.displayName||r.author_name||'Anonyme'}</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="color:var(--amber);font-size:13px">${stars}</span>
+              ${replied?'<span class="badge bg">Répondu</span>':'<span class="badge br">Sans réponse</span>'}
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--tx2)">${(r.text||r.originalText?.text||'(sans commentaire)').substring(0,200)}</div>
+        </div>`
+      }).join('')}
+    </div>`
+}
+
+// ── CHANGE PERIOD ──────────────────────────────────────────────────────────
+function changePeriod(pdvId, period) {
+  currentPeriod = period
+  renderDash(pdvId, false, period)
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+buildSidebar(null)
+renderAccueil()
+</script>
+</body>
+</html>
