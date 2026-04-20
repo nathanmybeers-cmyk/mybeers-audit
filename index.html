@@ -29,7 +29,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
 
 /* LOGIN */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.login-wrap{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:1000}
 .login-card{background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:2.5rem;width:340px;display:flex;flex-direction:column;gap:1.25rem}
 .login-logo{font-size:20px;font-weight:700;text-align:center;color:var(--tx)}
 .login-logo small{font-size:12px;font-weight:400;color:var(--tx2);display:block;margin-top:4px}
@@ -390,6 +390,7 @@ function showForm(id) {
         <div><label>ID compte publicitaire</label><input id="cf-adid" value="${p?.ad_account_id||''}" placeholder="Ex : act_346792040096064"></div>
       </div>
       <div style="margin-bottom:10px"><label>Token d'accès Meta (longue durée)</label><input id="cf-token" class="token-field" value="${p?.fb_token||''}" placeholder="EAAZCDhr..."></div>
+      <div style="margin-bottom:10px"><label>Page ID de filtrage <span style="font-weight:400;color:var(--tx2)">(pour filtrer les campagnes de cette page uniquement)</span></label><input id="cf-filter-page" value="${p?.filter_page_id||''}" placeholder="Ex : 609686032238115 — même valeur que Page ID Facebook si compte pub partagé"></div>
       <div class="sep"></div>
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">Google My Business</div>
       <div class="fg2" style="gap:10px">
@@ -413,6 +414,7 @@ function savePDV(existingId) {
     fb_page_id: document.getElementById('cf-fbid').value.trim(),
     ad_account_id: document.getElementById('cf-adid').value.trim(),
     fb_token: document.getElementById('cf-token').value.trim(),
+    filter_page_id: document.getElementById('cf-filter-page').value.trim(),
     gmb_place_id: document.getElementById('cf-gmbid').value.trim(),
     gmb_api_key: document.getElementById('cf-gmbkey').value.trim()
   }
@@ -432,12 +434,20 @@ async function loadAds(pdv, force, period) {
   const cacheKey = 'ads_' + (period||'30d')
   if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
   try {
-    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status&limit=100`
+    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,promoted_object{page_id}&limit=100`
     while(curl) {
       const d = await fetchMeta(curl, pdv.fb_token)
       campaigns = campaigns.concat(d.data||[])
       curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
       if(campaigns.length > 1000) break
+    }
+    // Filtrer par page_id si configuré et si promoted_object disponible
+    const filterPageId = pdv.filter_page_id || pdv.fb_page_id
+    if(filterPageId) {
+      const hasPromotedObject = campaigns.some(c => c.promoted_object?.page_id)
+      if(hasPromotedObject) {
+        campaigns = campaigns.filter(c => c.promoted_object?.page_id === filterPageId)
+      }
     }
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
