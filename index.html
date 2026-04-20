@@ -565,7 +565,7 @@ function renderAdsTab(data, pdv) {
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  // Sélecteur de période
+  // Sélecteur de période — basé uniquement sur les données présentes
   const yearMonths = {}
   data.forEach(r => {
     if(!r.date_start) return
@@ -575,8 +575,9 @@ function renderAdsTab(data, pdv) {
   })
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
+    <option disabled>──────────────</option>
     <option value="year-${y}">${y} — Toute l'année</option>
-    ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">↳ ${monthNames[m]}</option>`).join('')}
+    ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">&nbsp;&nbsp;&nbsp;${monthNames[m]}</option>`).join('')}
   `).join('')
 
   let periodLabel2 = '30 derniers jours'
@@ -586,10 +587,11 @@ function renderAdsTab(data, pdv) {
 
   const periodSel = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--tx2)">Période :</span>
-    <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
-    <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
-    <select style="font-size:12px;padding:4px 8px;width:auto" onchange="if(this.value){changePeriod('${pdv.id}',this.value);this.value=''}">
-      <option value="">Filtrer par période...</option>${yearOpts}
+    <select style="font-size:12px;padding:6px 10px;width:auto" onchange="changePeriod('${pdv.id}',this.value)">
+      <option value="30d" ${currentPeriod==='30d'?'selected':''}>30 derniers jours</option>
+      <option disabled>──────────────</option>
+      <option value="max" ${currentPeriod==='max'?'selected':''}>Toute la période</option>
+      ${yearOpts}
     </select>
   </div>`
 
