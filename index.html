@@ -602,7 +602,9 @@ function renderAdsTab(data, pdv, allData) {
     </select>
   </div>`
 
-  const filtered = getFiltered(data)
+  // Toujours filtrer depuis allData pour avoir accès à toutes les périodes
+  const dataToFilter = (allData && Array.isArray(allData) && !allData.error) ? allData : data
+  const filtered = getFiltered(dataToFilter)
   if(!filtered.length) return periodSel+`<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
 
   const rows = computeTypes(filtered)
