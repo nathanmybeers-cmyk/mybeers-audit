@@ -542,7 +542,7 @@ async function renderDash(pdvId, force, period) {
     <div id="t-page" style="display:none">${renderPageTab(page, pdv)}</div>
     ${pdv.gmb_place_id?`<div id="t-gmb" style="display:none">${renderGMBTab(gmb, pdv)}</div>`:''}
   `
-  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(computeTypes(getFiltered(adsAll||ads))) }, 100)
+  setTimeout(()=>{ if(adsAll && !adsAll.error && Array.isArray(adsAll)) drawAdsChart(computeTypes(getFiltered(ads, adsAll))) }, 100)
 }
 
 function showTab(el, id) {
@@ -551,18 +551,19 @@ function showTab(el, id) {
 }
 
 // ── FILTERING ──────────────────────────────────────────────────────────────
-function getFiltered(data) {
-  if(!data || !Array.isArray(data)) return []
-  if(currentPeriod==='30d' || currentPeriod==='max') return data
+function getFiltered(data30d, dataAll) {
+  if(!dataAll || !Array.isArray(dataAll)) return []
+  if(currentPeriod==='30d') return (data30d && Array.isArray(data30d) && !data30d.error) ? data30d : []
+  if(currentPeriod==='max') return dataAll
   if(currentPeriod.startsWith('year-')) {
     const fy = parseInt(currentPeriod.replace('year-',''))
-    return data.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
+    return dataAll.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
   }
   if(currentPeriod.includes('-')) {
     const [fy,fm] = currentPeriod.split('-').map(Number)
-    return data.filter(r => { if(!r.date_start) return false; const d=new Date(r.date_start); return d.getFullYear()===fy && d.getMonth()===fm })
+    return dataAll.filter(r => { if(!r.date_start) return false; const d=new Date(r.date_start); return d.getFullYear()===fy && d.getMonth()===fm })
   }
-  return data
+  return dataAll
 }
 
 // ── TAB ADS ────────────────────────────────────────────────────────────────
@@ -571,7 +572,6 @@ function renderAdsTab(data, pdv, allData) {
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  // Construire le select depuis TOUTES les données (pas seulement la période courante)
   const sourceForSelect = (allData && Array.isArray(allData) && !allData.error) ? allData : data
   const yearMonths = {}
   sourceForSelect.forEach(r => {
@@ -582,29 +582,34 @@ function renderAdsTab(data, pdv, allData) {
   })
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
-    <option disabled>──────────────</option>
     <option value="year-${y}">${y} — Toute l'année</option>
     ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">&nbsp;&nbsp;&nbsp;${monthNames[m]}</option>`).join('')}
   `).join('')
 
+  const isCustom = currentPeriod!=='30d' && currentPeriod!=='max'
+  let customLabel = 'Personnalisé'
+  if(isCustom && currentPeriod.startsWith('year-')) customLabel = currentPeriod.replace('year-','')+' — Toute l\'année'
+  else if(isCustom && currentPeriod.includes('-')){ const [fy,fm]=currentPeriod.split('-').map(Number); customLabel=`${monthNames[fm]} ${fy}` }
+
   let periodLabel2 = '30 derniers jours'
   if(currentPeriod==='max') periodLabel2='Toute la période'
-  else if(currentPeriod.startsWith('year-')) periodLabel2=currentPeriod.replace('year-','')+' — Toute l\'année'
-  else if(currentPeriod.includes('-')&&!currentPeriod.startsWith('year-')){ const [fy,fm]=currentPeriod.split('-').map(Number); periodLabel2=`${monthNames[fm]} ${fy}` }
+  else if(isCustom) periodLabel2=customLabel
 
-  const periodSel = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+  const periodSel = `<div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--tx2)">Période :</span>
-    <select style="font-size:12px;padding:6px 10px;width:auto" onchange="changePeriod('${pdv.id}',this.value)">
-      <option value="30d" ${currentPeriod==='30d'?'selected':''}>30 derniers jours</option>
-      <option disabled>──────────────</option>
-      <option value="max" ${currentPeriod==='max'?'selected':''}>Toute la période</option>
-      ${yearOpts}
-    </select>
+    <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
+    <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
+    <div style="position:relative;display:inline-block">
+      <button class="btn btn-sm${isCustom?' btn-primary':''}" onclick="document.getElementById('custom-sel-${pdv.id}').style.display=document.getElementById('custom-sel-${pdv.id}').style.display==='none'?'block':'none'">${isCustom?customLabel:'Personnalisé'} ▾</button>
+      <div id="custom-sel-${pdv.id}" style="display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--bg2);border:0.5px solid var(--bd2);border-radius:var(--r);padding:4px 0;min-width:180px;margin-top:4px">
+        <select size="${Object.values(yearMonths).reduce((a,s)=>a+s.size,0) + Object.keys(yearMonths).length}" style="border:none;background:transparent;width:100%;font-size:12px;outline:none;padding:0 8px" onchange="changePeriod('${pdv.id}',this.value);document.getElementById('custom-sel-${pdv.id}').style.display='none'">
+          ${yearOpts}
+        </select>
+      </div>
+    </div>
   </div>`
 
-  // Toujours filtrer depuis allData pour avoir accès à toutes les périodes
-  const dataToFilter = (allData && Array.isArray(allData) && !allData.error) ? allData : data
-  const filtered = getFiltered(dataToFilter)
+  const filtered = getFiltered(data, allData||data)
   if(!filtered.length) return periodSel+`<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
 
   const rows = computeTypes(filtered)
