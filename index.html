@@ -518,7 +518,13 @@ async function renderDash(pdvId, force, period) {
     </div>
     <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
 
-  const [ads, page, gmb] = await Promise.all([loadAds(pdv,force,currentPeriod), loadPage(pdv,force), loadGMB(pdv,force)])
+  // Toujours charger toutes les données pour construire le select complet
+  const [ads, adsAll, page, gmb] = await Promise.all([
+    loadAds(pdv, force, currentPeriod),
+    loadAds(pdv, false, 'max'),
+    loadPage(pdv, force),
+    loadGMB(pdv, force)
+  ])
 
   const cEl = document.getElementById('cache-ts')
   if(cEl){ try{ const c=DB.getCache(pdvId,'ads_'+currentPeriod); if(c) cEl.textContent=`Mis à jour le ${new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`))||'{}').ts||0 > 0 ? new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`)).ts).toLocaleDateString('fr-FR') : ''}` }catch(e){} }
@@ -532,11 +538,11 @@ async function renderDash(pdvId, force, period) {
       <div class="tab" onclick="showTab(this,'t-page')">Page Facebook</div>
       ${pdv.gmb_place_id?'<div class="tab" onclick="showTab(this,\'t-gmb\')">Google My Business</div>':''}
     </div>
-    <div id="t-ads">${renderAdsTab(ads, pdv)}</div>
+    <div id="t-ads">${renderAdsTab(ads, pdv, adsAll)}</div>
     <div id="t-page" style="display:none">${renderPageTab(page, pdv)}</div>
     ${pdv.gmb_place_id?`<div id="t-gmb" style="display:none">${renderGMBTab(gmb, pdv)}</div>`:''}
   `
-  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(computeTypes(getFiltered(ads))) }, 100)
+  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(computeTypes(getFiltered(adsAll||ads))) }, 100)
 }
 
 function showTab(el, id) {
@@ -560,14 +566,15 @@ function getFiltered(data) {
 }
 
 // ── TAB ADS ────────────────────────────────────────────────────────────────
-function renderAdsTab(data, pdv) {
+function renderAdsTab(data, pdv, allData) {
   if(!pdv.ad_account_id||!pdv.fb_token) return `<div class="card"><div class="warn-box">Compte publicitaire non configuré.</div></div>`
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  // Sélecteur de période — basé uniquement sur les données présentes
+  // Construire le select depuis TOUTES les données (pas seulement la période courante)
+  const sourceForSelect = (allData && Array.isArray(allData) && !allData.error) ? allData : data
   const yearMonths = {}
-  data.forEach(r => {
+  sourceForSelect.forEach(r => {
     if(!r.date_start) return
     const d=new Date(r.date_start); const y=d.getFullYear(); const m=d.getMonth()
     if(!yearMonths[y]) yearMonths[y]=new Set()
