@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RS Franchise — Suivi performances</title>
+<title>RS Franchise — My Beers</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -15,6 +15,8 @@
   --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-tx:#633806;
   --red:#E24B4A;--red-bg:#FCEBEB;--red-tx:#791F1F;
   --blue:#378ADD;--blue-bg:#E6F1FB;--blue-tx:#0C447C;
+  --purple:#7F77DD;--purple-bg:#EEEDFE;--purple-tx:#3C3489;
+  --pink:#D4537E;--pink-bg:#FBEAF0;--pink-tx:#72243E;
   --r:8px;--rl:12px;
 }
 @media(prefers-color-scheme:dark){:root{
@@ -22,11 +24,21 @@
   --tx:#f0eeea;--tx2:#aaa;--tx3:#666;--bd:rgba(255,255,255,0.1);--bd2:rgba(255,255,255,0.18);
   --green-bg:#085041;--green-tx:#9FE1CB;--amber-bg:#633806;--amber-tx:#FAC775;
   --red-bg:#501313;--red-tx:#F7C1C1;--blue-bg:#042C53;--blue-tx:#B5D4F4;
+  --purple-bg:#26215C;--purple-tx:#CECBF6;--pink-bg:#4B1528;--pink-tx:#F4C0D1;
 }}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
-.app{display:flex;min-height:100vh}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.login-card{background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:2.5rem;width:340px;display:flex;flex-direction:column;gap:1.25rem}
+.login-logo{font-size:20px;font-weight:700;text-align:center;color:var(--tx)}
+.login-logo small{font-size:12px;font-weight:400;color:var(--tx2);display:block;margin-top:4px}
+.login-err{background:var(--red-bg);color:var(--red-tx);border-radius:var(--r);padding:8px 12px;font-size:12px;display:none}
+
+/* APP */
+.app{display:flex;min-height:100vh;display:none}
 .sidebar{width:230px;background:var(--bg2);border-right:0.5px solid var(--bd);padding:1rem;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
-.logo{font-size:15px;font-weight:600;padding-bottom:1rem;border-bottom:0.5px solid var(--bd);margin-bottom:.5rem}
+.logo{font-size:15px;font-weight:600;padding-bottom:1rem;border-bottom:0.5px solid var(--bd);margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center}
 .logo small{font-size:11px;font-weight:400;color:var(--tx2);display:block;margin-top:2px}
 .ns{font-size:10px;color:var(--tx3);padding:10px 10px 4px;text-transform:uppercase;letter-spacing:.06em}
 .ni{padding:7px 10px;border-radius:var(--r);font-size:13px;cursor:pointer;color:var(--tx2)}
@@ -51,6 +63,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ba{background:var(--amber-bg);color:var(--amber-tx)}
 .br{background:var(--red-bg);color:var(--red-tx)}
 .bb{background:var(--blue-bg);color:var(--blue-tx)}
+.bpu{background:var(--purple-bg);color:var(--purple-tx)}
+.bpi{background:var(--pink-bg);color:var(--pink-tx)}
 .fl{display:flex;flex-direction:column;gap:10px}
 .fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 label{font-size:11px;color:var(--tx2);display:block;margin-bottom:3px}
@@ -70,8 +84,9 @@ textarea{resize:vertical;min-height:60px}
 .row{display:flex;gap:1.25rem;align-items:flex-start;flex-wrap:wrap}
 .tbl-wrap{overflow-x:auto}
 table.t{width:100%;border-collapse:collapse;font-size:12px}
-table.t th{text-align:left;font-size:11px;font-weight:500;color:var(--tx2);padding:0 8px 8px;border-bottom:0.5px solid var(--bd);white-space:nowrap}
-table.t td{padding:9px 8px;border-bottom:0.5px solid var(--bd);color:var(--tx);vertical-align:middle}
+table.t th{text-align:center;font-size:11px;font-weight:500;color:var(--tx2);padding:0 8px 8px;border-bottom:0.5px solid var(--bd);white-space:nowrap}
+table.t td{padding:9px 8px;border-bottom:0.5px solid var(--bd);color:var(--tx);vertical-align:middle;text-align:center}
+table.t td.tal{text-align:left}
 table.t tr:last-child td{border-bottom:none}
 table.t tr:hover td{background:var(--bg3)}
 .empty{font-size:13px;color:var(--tx2);padding:.5rem 0}
@@ -81,21 +96,91 @@ table.t tr:hover td{background:var(--bg3)}
 .warn-box{background:var(--amber-bg);color:var(--amber-tx);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;line-height:1.6}
 .chart-wrap{position:relative;width:100%}
 .token-field{font-family:monospace;font-size:11px}
+.logout-btn{font-size:11px;color:var(--tx3);cursor:pointer;padding:3px 7px;border-radius:var(--r);border:0.5px solid var(--bd)}
+.logout-btn:hover{background:var(--bg3)}
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">RS Franchise<small>My Beers — Suivi performances</small></div>
+    <div class="login-err" id="login-err">Identifiant ou mot de passe incorrect.</div>
+    <div class="fl">
+      <div><label>Identifiant</label><input id="l-user" type="text" placeholder="Votre identifiant" autocomplete="username"></div>
+      <div><label>Mot de passe</label><input id="l-pass" type="password" placeholder="Votre mot de passe" autocomplete="current-password"></div>
+      <button class="btn btn-primary" onclick="doLogin()" style="width:100%;padding:10px">Se connecter</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
   <div class="sidebar">
-    <div class="logo">RS Franchise<small>My Beers — Suivi RS</small></div>
+    <div class="logo">
+      <div>RS Franchise<small id="role-label"></small></div>
+      <span class="logout-btn" onclick="doLogout()">Déco.</span>
+    </div>
     <div class="ns">Navigation</div>
     <div class="ni active" data-v="accueil">Accueil</div>
-    <div class="ni" data-v="config">Gérer les établissements</div>
+    <div class="ni" data-v="config" id="nav-config">Gérer les établissements</div>
     <div class="ns">Établissements</div>
     <div id="pdv-list"></div>
   </div>
   <div class="main" id="main"></div>
 </div>
+
 <script>
+// ── AUTH ───────────────────────────────────────────────────────────────────
+const USERS = {
+  'admin':     { pass: 'MyBeers2025!', role: 'admin' },
+  'animateur': { pass: 'Anim2025#',    role: 'animateur' }
+}
+
+let currentRole = null
+
+function doLogin() {
+  const u = document.getElementById('l-user').value.trim().toLowerCase()
+  const p = document.getElementById('l-pass').value
+  const err = document.getElementById('login-err')
+  const user = USERS[u]
+  if(!user || user.pass !== p) { err.style.display='block'; return }
+  err.style.display='none'
+  currentRole = user.role
+  localStorage.setItem('rsf_session', JSON.stringify({role: currentRole, ts: Date.now()}))
+  showApp()
+}
+
+function doLogout() {
+  localStorage.removeItem('rsf_session')
+  currentRole = null
+  document.getElementById('app').style.display='none'
+  document.getElementById('login-wrap').style.display='flex'
+  document.getElementById('l-user').value=''
+  document.getElementById('l-pass').value=''
+}
+
+function showApp() {
+  document.getElementById('login-wrap').style.display='none'
+  document.getElementById('app').style.display='flex'
+  document.getElementById('role-label').textContent = currentRole === 'admin' ? 'Admin' : 'Animateur'
+  const cfgNav = document.getElementById('nav-config')
+  if(currentRole !== 'admin') cfgNav.style.display='none'
+  else cfgNav.style.display='block'
+  buildSidebar(null)
+  renderAccueil()
+}
+
+// Vérifier session existante
+;(function(){
+  const s = localStorage.getItem('rsf_session')
+  if(s){ try{ const j=JSON.parse(s); if(j.role && Date.now()-j.ts < 8*3600000){ currentRole=j.role; showApp(); return } }catch(e){} }
+  document.getElementById('login-wrap').style.display='flex'
+})()
+
+document.getElementById('l-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin() })
+
 // ── STORAGE ────────────────────────────────────────────────────────────────
 const DB = {
   get cfg(){ try{ return JSON.parse(localStorage.getItem('rsf_cfg')||'[]') }catch(e){ return [] } },
@@ -118,6 +203,91 @@ async function fetchMeta(endpoint, token) {
   return j
 }
 
+// ── TYPE DETECTION ─────────────────────────────────────────────────────────
+const TYPE_DEFS = [
+  {label:'Apéro Quiz',    keys:['apéro quiz','apero quiz','quiz','mardi']},
+  {label:'Apéro Concert', keys:['apéro concert','apero concert','concert']},
+  {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl']},
+  {label:'Karaoke',       keys:['karaoké','karaoke']},
+  {label:'SBK',           keys:['sbk']},
+  {label:'Club Mix',      keys:['club mix']},
+  {label:'Crush',         keys:['crush']},
+  {label:'Beer Pong',     keys:['beer pong','pong','championnat']},
+  {label:'Sport',         keys:['vs ','versus','match','foot','rugby']},
+  {label:'Comedy Club',   keys:['stand-up','stand up','comedy']},
+  {label:'Flash Tattoo',  keys:['tattoo','tatou','tatouage']},
+  {label:'Poker',         keys:['poker']},
+]
+
+// Couleurs par type (badge class)
+const TYPE_COLORS = {
+  'Apéro Quiz':    'ba', 'Apéro Concert': 'ba', 'Beer Pong':   'ba',
+  'Club Mix':      'ba', 'Fléchettes':    'ba',
+  'Karaoke':       'bg', 'Sport':         'bg', 'Crush':       'bg',
+  'SBK':           'bg', 'Comedy Club':   'bg', 'Flash Tattoo':'bg', 'Poker': 'bg',
+  'Soirée':        'br',
+  'Divers':        'bb',
+}
+
+// Durée minimale en vert par type
+const DUREE_MIN = {
+  'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Fléchettes':4,'SBK':4,
+  'Crush':4,'Sport':2,'Karaoke':5,'Comedy Club':4,'Divers':2,'Poker':5,
+  'Beer Pong':7,'Flash Tattoo':4,
+}
+
+function normalizeUnicode(s) {
+  const ranges = [
+    [0x1D400,0x1D419,65],[0x1D41A,0x1D433,97],[0x1D434,0x1D44D,65],[0x1D44E,0x1D467,97],
+    [0x1D468,0x1D481,65],[0x1D482,0x1D49B,97],[0x1D49C,0x1D4B5,65],[0x1D4B6,0x1D4CF,97],
+    [0x1D4D0,0x1D4E9,65],[0x1D4EA,0x1D503,97],[0x1D504,0x1D51D,65],[0x1D51E,0x1D537,97],
+    [0x1D538,0x1D551,65],[0x1D552,0x1D56B,97],[0x1D56C,0x1D585,65],[0x1D586,0x1D59F,97],
+    [0x1D5A0,0x1D5B9,65],[0x1D5BA,0x1D5D3,97],[0x1D5D4,0x1D5ED,65],[0x1D5EE,0x1D607,97],
+    [0x1D608,0x1D621,65],[0x1D622,0x1D63B,97],[0x1D63C,0x1D655,65],[0x1D656,0x1D66F,97],
+    [0x1D670,0x1D689,65],[0x1D68A,0x1D6A3,97],
+  ]
+  return s.normalize('NFKD').replace(/[\u{1D400}-\u{1D7FF}]/gu, c => {
+    const cp = c.codePointAt(0)
+    for(const [start,end,base] of ranges){ if(cp>=start&&cp<=end) return String.fromCharCode(cp-start+base) }
+    return c
+  })
+}
+
+function detectType(name) {
+  const n = normalizeUnicode(name||'').toLowerCase()
+  const found = TYPE_DEFS.find(t=>t.keys.some(k=>n.includes(k)))
+  return found ? found.label : null
+}
+
+function computeTypes(rows) {
+  // 1er passage
+  const result = rows.map(r => {
+    const isFriday = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
+    const found = detectType(r.campaign_name||'')
+    return {...r, _type: found || (isFriday ? 'Soirée' : 'Divers')}
+  })
+  // 2ème passage héritage
+  const map = {}
+  result.forEach(r => { if(r._type!=='Divers' && r.date_start && r.date_stop) map[r.date_start+'_'+r.date_stop]=r._type })
+  result.forEach(r => { if(r._type==='Divers' && r.date_start && r.date_stop){ const k=r.date_start+'_'+r.date_stop; if(map[k]) r._type=map[k] } })
+  return result
+}
+
+function dureeBadge(duree, type, objectif) {
+  if(duree==='—') return '<span style="color:var(--tx3)">—</span>'
+  let min = DUREE_MIN[type]
+  if(type==='Soirée') min = objectif==='Événement' ? 14 : 5
+  if(min === undefined) return `${duree}j`
+  const ok = duree >= min
+  const color = ok ? 'var(--green)' : 'var(--red)'
+  return `<span style="font-weight:500;color:${color}">${duree}j</span>`
+}
+
+function objBadge(objLabel) {
+  const good = ['Interaction','Trafic','Événement'].includes(objLabel)
+  return `<span class="badge ${good?'bg':'br'}">${objLabel}</span>`
+}
+
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
 function buildSidebar(activePdv) {
   const cfg = DB.cfg
@@ -125,7 +295,6 @@ function buildSidebar(activePdv) {
   if(!cfg.length){ el.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Aucun établissement</div>'; return }
   el.innerHTML = cfg.map(p => {
     const ok = p.fb_token && p.ad_account_id
-    const dot = ok ? 'status-ok' : 'status-warn'
     return `<div class="pdv-item${activePdv===p.id?' active':''}" data-pdv="${p.id}" onclick="navPDV('${p.id}')">
       <span class="sdot" style="background:${ok?'var(--green)':'var(--amber)'}"></span>${p.nom}
     </div>`
@@ -163,9 +332,9 @@ function renderAccueil() {
       <div class="ct">État des accès</div>
       ${cfg.length===0?'<p class="empty">Aucun établissement configuré.</p>':`
       <div class="tbl-wrap"><table class="t">
-        <thead><tr><th>Établissement</th><th>Ville</th><th>Page Facebook</th><th>Compte pub (Ads)</th><th>GMB</th></tr></thead>
+        <thead><tr><th>Établissement</th><th>Ville</th><th>Page Facebook</th><th>Compte pub</th><th>GMB</th></tr></thead>
         <tbody>${cfg.map(p=>`<tr style="cursor:pointer" onclick="navPDV('${p.id}')">
-          <td><strong>${p.nom}</strong></td>
+          <td class="tal"><strong>${p.nom}</strong></td>
           <td>${p.ville||'—'}</td>
           <td>${p.fb_page_id&&p.fb_token?'<span class="badge bg">OK</span>':'<span class="badge br">Manquant</span>'}</td>
           <td>${p.ad_account_id?'<span class="badge bg">OK</span>':'<span class="badge ba">Non configuré</span>'}</td>
@@ -175,8 +344,9 @@ function renderAccueil() {
     </div>`
 }
 
-// ── CONFIG ─────────────────────────────────────────────────────────────────
+// ── CONFIG (admin seulement) ───────────────────────────────────────────────
 function renderConfig(editId) {
+  if(currentRole !== 'admin'){ renderAccueil(); return }
   const cfg = DB.cfg
   document.getElementById('main').innerHTML = `
     <div class="topbar"><h1>Gérer les établissements</h1>
@@ -186,14 +356,14 @@ function renderConfig(editId) {
     ${cfg.length===0?'<div class="card"><p class="empty">Aucun établissement.</p></div>':`
     <div class="card">
       <div class="tbl-wrap"><table class="t">
-        <thead><tr><th>Nom</th><th>Ville</th><th>Page ID FB</th><th>Ad Account</th><th>Token</th><th>GMB Place ID</th><th></th></tr></thead>
+        <thead><tr><th>Nom</th><th>Ville</th><th>Page ID FB</th><th>Ad Account</th><th>Token</th><th>GMB</th><th></th></tr></thead>
         <tbody>${cfg.map(p=>`<tr>
-          <td><strong>${p.nom}</strong></td>
+          <td class="tal"><strong>${p.nom}</strong></td>
           <td>${p.ville||'—'}</td>
           <td style="font-family:monospace;font-size:11px">${p.fb_page_id||'—'}</td>
           <td style="font-family:monospace;font-size:11px">${p.ad_account_id||'—'}</td>
           <td>${p.fb_token?'<span class="badge bg">Défini</span>':'<span class="badge br">Manquant</span>'}</td>
-          <td style="font-family:monospace;font-size:11px">${p.gmb_place_id||'—'}</td>
+          <td>${p.gmb_place_id?'<span class="badge bg">OK</span>':'<span class="badge ba">—</span>'}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-sm" onclick="showForm('${p.id}')">Modifier</button>
             <button class="btn btn-sm btn-danger" onclick="deletePDV('${p.id}')">Suppr.</button>
@@ -263,28 +433,25 @@ async function loadAds(pdv, force, period) {
   const cacheKey = 'ads_' + (period||'30d')
   if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
   try {
-    // 1. Récupérer toutes les campagnes avec noms et dates réelles
     let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status&limit=100`
     while(curl) {
       const d = await fetchMeta(curl, pdv.fb_token)
       campaigns = campaigns.concat(d.data||[])
       curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
-      if(campaigns.length > 500) break
+      if(campaigns.length > 1000) break
     }
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
 
-    // 2. Récupérer les insights avec campaign_id
     const preset = period==='max' ? 'maximum' : 'last_30d'
     let insights=[], iurl=`${pdv.ad_account_id}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
     while(iurl) {
       const d = await fetchMeta(iurl, pdv.fb_token)
       insights = insights.concat(d.data||[])
       iurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
-      if(insights.length > 300) break
+      if(insights.length > 500) break
     }
 
-    // 3. Croiser les deux
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
       return {
@@ -295,6 +462,8 @@ async function loadAds(pdv, force, period) {
         status: camp.status || '—'
       }
     })
+    // Trier du plus récent au plus ancien
+    merged.sort((a,b) => (b.date_start||'').localeCompare(a.date_start||''))
     DB.setCache(pdv.id, cacheKey, merged); return merged
   } catch(e){ return {error:e.message} }
 }
@@ -331,21 +500,19 @@ async function renderDash(pdvId, force, period) {
 
   document.getElementById('main').innerHTML = `
     <div class="topbar">
-      <h1>${pdv.nom}${pdv.ville?` <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${pdv.ville}</span>`:''}
-      </h1>
+      <h1>${pdv.nom}${pdv.ville?` <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${pdv.ville}</span>`:''}</h1>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="cache-ts" style="font-size:11px;color:var(--tx3)"></span>
         <button class="btn" onclick="renderDash('${pdvId}',true)">Actualiser</button>
-        <button class="btn" onclick="showForm('${pdvId}');nav('config')">Configurer</button>
+        ${currentRole==='admin'?`<button class="btn" onclick="showForm('${pdvId}');nav('config')">Configurer</button>`:''}
       </div>
     </div>
     <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
 
   const [ads, page, gmb] = await Promise.all([loadAds(pdv,force,currentPeriod), loadPage(pdv,force), loadGMB(pdv,force)])
 
-  const ts = DB.getCache(pdvId,'ads_'+currentPeriod)
   const cEl = document.getElementById('cache-ts')
-  if(cEl && ts) cEl.textContent = `Mis à jour le ${new Date(DB.getCache(pdvId,'ads')?.ts||Date.now()).toLocaleDateString('fr-FR')}`
+  if(cEl){ try{ const c=DB.getCache(pdvId,'ads_'+currentPeriod); if(c) cEl.textContent=`Mis à jour le ${new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`))||'{}').ts||0 > 0 ? new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`)).ts).toLocaleDateString('fr-FR') : ''}` }catch(e){} }
 
   const body = document.getElementById('dash-body')
   if(!body) return
@@ -360,7 +527,7 @@ async function renderDash(pdvId, force, period) {
     <div id="t-page" style="display:none">${renderPageTab(page, pdv)}</div>
     ${pdv.gmb_place_id?`<div id="t-gmb" style="display:none">${renderGMBTab(gmb, pdv)}</div>`:''}
   `
-  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(ads) }, 100)
+  setTimeout(()=>{ if(ads && !ads.error && Array.isArray(ads)) drawAdsChart(computeTypes(getFiltered(ads))) }, 100)
 }
 
 function showTab(el, id) {
@@ -368,220 +535,157 @@ function showTab(el, id) {
   ;['t-ads','t-page','t-gmb'].forEach(i=>{ const e=document.getElementById(i); if(e) e.style.display=i===id?'block':'none' })
 }
 
+// ── FILTERING ──────────────────────────────────────────────────────────────
+function getFiltered(data) {
+  if(!data || !Array.isArray(data)) return []
+  if(currentPeriod==='30d' || currentPeriod==='max') return data
+  if(currentPeriod.startsWith('year-')) {
+    const fy = parseInt(currentPeriod.replace('year-',''))
+    return data.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
+  }
+  if(currentPeriod.includes('-')) {
+    const [fy,fm] = currentPeriod.split('-').map(Number)
+    return data.filter(r => { if(!r.date_start) return false; const d=new Date(r.date_start); return d.getFullYear()===fy && d.getMonth()===fm })
+  }
+  return data
+}
+
 // ── TAB ADS ────────────────────────────────────────────────────────────────
 function renderAdsTab(data, pdv) {
-  if(!pdv.ad_account_id||!pdv.fb_token) return `<div class="card"><div class="warn-box">Compte publicitaire non configuré.<br><strong>→ Ajoutez l'ID du compte pub (format act_XXXXXXXXX) dans la configuration.</strong></div></div>`
+  if(!pdv.ad_account_id||!pdv.fb_token) return `<div class="card"><div class="warn-box">Compte publicitaire non configuré.</div></div>`
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  const periodLabel = currentPeriod==='max' ? 'Toute la période' : currentPeriod==='30d' ? '30 derniers jours' : currentPeriod
-
-  // Construire les options année/mois depuis les données
-  const allData = data
+  // Sélecteur de période
   const yearMonths = {}
-  allData.forEach(r => {
+  data.forEach(r => {
     if(!r.date_start) return
-    const d = new Date(r.date_start)
-    const y = d.getFullYear()
-    const m = d.getMonth()
+    const d=new Date(r.date_start); const y=d.getFullYear(); const m=d.getMonth()
     if(!yearMonths[y]) yearMonths[y]=new Set()
     yearMonths[y].add(m)
   })
-  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
     <option value="year-${y}">${y} — Toute l'année</option>
     ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">↳ ${monthNames[m]}</option>`).join('')}
   `).join('')
 
-  // Label période lisible
   let periodLabel2 = '30 derniers jours'
-  if(currentPeriod==='max') periodLabel2 = 'Toute la période'
-  else if(currentPeriod.startsWith('year-')) periodLabel2 = currentPeriod.replace('year-','') + ' — Toute l\'année'
-  else if(currentPeriod.includes('-') && !currentPeriod.startsWith('year-')) {
-    const [fy,fm] = currentPeriod.split('-').map(Number)
-    periodLabel2 = `${monthNames[fm]} ${fy}`
-  }
+  if(currentPeriod==='max') periodLabel2='Toute la période'
+  else if(currentPeriod.startsWith('year-')) periodLabel2=currentPeriod.replace('year-','')+' — Toute l\'année'
+  else if(currentPeriod.includes('-')&&!currentPeriod.startsWith('year-')){ const [fy,fm]=currentPeriod.split('-').map(Number); periodLabel2=`${monthNames[fm]} ${fy}` }
 
-  const periodSelector = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+  const periodSel = `<div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--tx2)">Période :</span>
     <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
     <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
     <select style="font-size:12px;padding:4px 8px;width:auto" onchange="if(this.value){changePeriod('${pdv.id}',this.value);this.value=''}">
-      <option value="">Filtrer par période...</option>
-      ${yearOpts}
+      <option value="">Filtrer par période...</option>${yearOpts}
     </select>
   </div>`
 
-  // Filtrer les données selon la période
-  let filtered = allData
-  if(currentPeriod.startsWith('year-')) {
-    const fy = parseInt(currentPeriod.replace('year-',''))
-    filtered = allData.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
-  } else if(currentPeriod!=='30d' && currentPeriod!=='max' && currentPeriod.includes('-')) {
-    const [fy, fm] = currentPeriod.split('-').map(Number)
-    filtered = allData.filter(r => {
-      if(!r.date_start) return false
-      const d = new Date(r.date_start)
-      return d.getFullYear()===fy && d.getMonth()===fm
-    })
+  const filtered = getFiltered(data)
+  if(!filtered.length) return periodSel+`<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
+
+  const rows = computeTypes(filtered)
+  const totalSpend=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
+  const totalReach=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
+  const totalImpr=rows.reduce((a,r)=>a+(parseInt(r.impressions)||0),0)
+  const totalReact=rows.reduce((a,r)=>a+getAction(r.actions,'post_reaction'),0)
+  const totalEng=rows.reduce((a,r)=>a+getAction(r.actions,'post_engagement'),0)
+  const totalShares=rows.reduce((a,r)=>a+getAction(r.actions,'post'),0)
+  const cpm=totalImpr>0?(totalSpend/totalImpr*1000):0
+  const cpr=totalReach>0?(totalSpend/totalReach*1000):0
+
+  const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
+  const resultMap_fn=(r,obj)=>{
+    const m={'OUTCOME_ENGAGEMENT':getAction(r.actions,'post_engagement'),'LINK_CLICKS':getAction(r.actions,'link_click'),'OUTCOME_TRAFFIC':getAction(r.actions,'link_click'),'MESSAGES':getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),'REACH':parseInt(r.reach)||0,'EVENT_RESPONSES':getAction(r.actions,'rsvp'),'OUTCOME_AWARENESS':parseInt(r.reach)||0}
+    return m[obj]!==undefined ? m[obj] : '—'
   }
 
-  if(!filtered.length) return periodSelector + `<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
+  const tableRows = rows.map(r=>{
+    const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
+    const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,50)
+    const type = r._type
+    const tc = TYPE_COLORS[type]||'bb'
+    const objLabel = objMap[r.objective]||r.objective||'—'
+    const resultVal = resultMap_fn(r, r.objective)
+    const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : '—'
+    // Badge plateforme
+    const platBadge = isIG
+      ? `<span class="badge bpi">Instagram</span>`
+      : `<span class="badge bb">Facebook</span>`
+    return `<tr>
+      <td>${platBadge}</td>
+      <td class="tal" title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
+      <td><span class="badge ${tc}">${type}</span></td>
+      <td>${fmtD(r.date_start)}</td>
+      <td>${fmtD(r.date_stop)}</td>
+      <td>${dureeBadge(duree, type, objLabel)}</td>
+      <td>${fmt(r.reach)}</td>
+      <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
+      <td>${fmtE(r.spend)}</td>
+      <td>${objBadge(objLabel)}</td>
+      <td style="font-weight:500">${fmt(resultVal)}</td>
+      <td>${fmt(getAction(r.actions,'post'))}</td>
+      <td>${fmt(getAction(r.actions,'post_reaction'))}</td>
+    </tr>`
+  }).join('')
 
-  const totalSpend = filtered.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
-  const totalReach = filtered.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
-  const totalImpr = filtered.reduce((a,r)=>a+(parseInt(r.impressions)||0),0)
-  const totalReact = filtered.reduce((a,r)=>a+getAction(r.actions,'post_reaction'),0)
-  const totalEng = filtered.reduce((a,r)=>a+getAction(r.actions,'post_engagement'),0)
-  const totalShares = filtered.reduce((a,r)=>a+getAction(r.actions,'post'),0)
-  const cpm = totalImpr>0 ? (totalSpend/totalImpr*1000) : 0
-  const cpr = totalReach>0 ? (totalSpend/totalReach*1000) : 0
-
-  return `
-    ${periodSelector}
+  return `${periodSel}
     <div class="kgrid" style="margin-bottom:1.25rem">
-      <div class="kc"><div class="kl">Budget dépensé (${periodLabel2})</div><div class="kv">${fmtE(totalSpend)}</div></div>
-      <div class="kc"><div class="kl">Couverture totale</div><div class="kv">${fmt(totalReach)}</div></div>
+      <div class="kc"><div class="kl">Budget (${periodLabel2})</div><div class="kv">${fmtE(totalSpend)}</div></div>
+      <div class="kc"><div class="kl">Couverture</div><div class="kv">${fmt(totalReach)}</div></div>
       <div class="kc"><div class="kl">Impressions</div><div class="kv">${fmt(totalImpr)}</div></div>
       <div class="kc"><div class="kl">Réactions</div><div class="kv">${fmt(totalReact)}</div></div>
       <div class="kc"><div class="kl">Engagements</div><div class="kv">${fmt(totalEng)}</div></div>
       <div class="kc"><div class="kl">Partages</div><div class="kv">${fmt(totalShares)}</div></div>
       <div class="kc"><div class="kl">CPM</div><div class="kv">${fmtE(cpm)}</div></div>
-      <div class="kc"><div class="kl">CPR (coût/1000 atteints)</div><div class="kv">${fmtE(cpr)}</div></div>
+      <div class="kc"><div class="kl">CPR</div><div class="kv">${fmtE(cpr)}</div></div>
     </div>
-    <div class="row">
-      <div style="flex:1;min-width:0">
-        <div class="card" style="margin-bottom:1.25rem">
-          <div class="ct">Évolution budget & couverture par publication</div>
-          <div class="chart-wrap" style="height:200px"><canvas id="ads-chart" role="img" aria-label="Budget et couverture par publication">Données publicitaires.</canvas></div>
-        </div>
-        <div class="card">
-          <div class="ct">Détail des publications boostées — ${periodLabel2}</div>
-          <div class="tbl-wrap"><table class="t">
-            <thead><tr><th>Plateforme</th><th style="min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
-            <tbody>${(()=>{
-              const normalizeUnicode = s => {
-                const ranges = [
-                  [0x1D400,0x1D419,65],[0x1D41A,0x1D433,97],
-                  [0x1D434,0x1D44D,65],[0x1D44E,0x1D467,97],
-                  [0x1D468,0x1D481,65],[0x1D482,0x1D49B,97],
-                  [0x1D49C,0x1D4B5,65],[0x1D4B6,0x1D4CF,97],
-                  [0x1D4D0,0x1D4E9,65],[0x1D4EA,0x1D503,97],
-                  [0x1D504,0x1D51D,65],[0x1D51E,0x1D537,97],
-                  [0x1D538,0x1D551,65],[0x1D552,0x1D56B,97],
-                  [0x1D56C,0x1D585,65],[0x1D586,0x1D59F,97],
-                  [0x1D5A0,0x1D5B9,65],[0x1D5BA,0x1D5D3,97],
-                  [0x1D5D4,0x1D5ED,65],[0x1D5EE,0x1D607,97],
-                  [0x1D608,0x1D621,65],[0x1D622,0x1D63B,97],
-                  [0x1D63C,0x1D655,65],[0x1D656,0x1D66F,97],
-                  [0x1D670,0x1D689,65],[0x1D68A,0x1D6A3,97],
-                ]
-                return s.normalize('NFKD').replace(/[\u{1D400}-\u{1D7FF}]/gu, c => {
-                  const cp = c.codePointAt(0)
-                  for(const [start,end,base] of ranges) { if(cp>=start&&cp<=end) return String.fromCharCode(cp-start+base) }
-                  return c
-                })
-              }
-              const typeDefs = [
-                {label:'Apéro Quiz', keys:['apéro quiz','apero quiz','quiz','mardi']},
-                {label:'Apéro Concert', keys:['apéro concert','apero concert','concert']},
-                {label:'Fléchettes', keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl']},
-                {label:'Karaoke', keys:['karaoké','karaoke']},
-                {label:'SBK', keys:['sbk']},
-                {label:'Club Mix', keys:['club mix']},
-                {label:'Crush', keys:['crush']},
-                {label:'Beer Pong', keys:['beer pong','pong','championnat']},
-                {label:'Sport', keys:['vs ','versus','match','foot','rugby']},
-              ]
-              const typeColors = {'Apéro Quiz':'bb','Apéro Concert':'bg','Fléchettes':'ba','Karaoke':'br','SBK':'bb','Club Mix':'bg','Crush':'br','Beer Pong':'bg','Sport':'bg','Soirée':'ba','Divers':''}
-
-              const rows = filtered.map(r => {
-                const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
-                const isFriday = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
-                const found = typeDefs.find(t=>t.keys.some(k=>n.includes(k)))
-                const type = found ? found.label : isFriday ? 'Soirée' : 'Divers'
-                return {...r, _type: type}
-              })
-
-              // 2ème passage : héritage par période pour les "Divers"
-              const periodTypeMap = {}
-              rows.forEach(r => { if(r._type!=='Divers' && r.date_start && r.date_stop) { const key=r.date_start+'_'+r.date_stop; periodTypeMap[key]=r._type } })
-              rows.forEach(r => { if(r._type==='Divers' && r.date_start && r.date_stop) { const key=r.date_start+'_'+r.date_stop; if(periodTypeMap[key]) r._type=periodTypeMap[key] } })
-
-              return rows.map(r => {
-                const isIG = r.campaign_name&&r.campaign_name.toLowerCase().includes('instagram')
-                const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,50)
-                const type = r._type
-                const tc = typeColors[type]||''
-                const objMap = {
-                'OUTCOME_ENGAGEMENT':'Interaction',
-                'OUTCOME_AWARENESS':'Notoriété',
-                'LINK_CLICKS':'Trafic',
-                'OUTCOME_TRAFFIC':'Trafic',
-                'MESSAGES':'Messages',
-                'REACH':'Couverture',
-                'EVENT_RESPONSES':'Événement'
-              }
-              const objLabel = objMap[r.objective] || r.objective || '—'
-              const resultMap = {
-                'OUTCOME_ENGAGEMENT': getAction(r.actions,'post_engagement'),
-                'LINK_CLICKS': getAction(r.actions,'link_click'),
-                'OUTCOME_TRAFFIC': getAction(r.actions,'link_click'),
-                'MESSAGES': getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),
-                'REACH': parseInt(r.reach)||0,
-                'EVENT_RESPONSES': getAction(r.actions,'rsvp'),
-                'OUTCOME_AWARENESS': parseInt(r.reach)||0
-              }
-              const resultVal = resultMap[r.objective] !== undefined ? resultMap[r.objective] : '—'
-              // Calcul durée en jours
-              const duree = r.date_start && r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(1000*60*60*24)) : '—'
-              return `<tr>
-                <td><span class="badge ${isIG?'bb':'bg'}">${isIG?'Instagram':'Facebook'}</span></td>
-                <td title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
-                <td>${tc?`<span class="badge ${tc}">${type}</span>`:type}</td>
-                <td style="white-space:nowrap">${fmtD(r.date_start)}</td>
-                <td style="white-space:nowrap">${fmtD(r.date_stop)}</td>
-                <td style="text-align:center">${duree}${duree!=='—'?'j':''}</td>
-                <td>${fmt(r.reach)}</td>
-                <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
-                <td style="white-space:nowrap;font-weight:500">${fmtE(r.spend)}</td>
-                <td><span class="badge ba">${objLabel}</span></td>
-                <td style="font-weight:500">${fmt(resultVal)}</td>
-                <td>${fmt(getAction(r.actions,'post'))}</td>
-                <td>${fmt(getAction(r.actions,'post_reaction'))}</td>
-              </tr>`
-              }).join('')
-            })()} </tbody>
-          </table></div>
-        </div>
-      </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Budget par type — ${periodLabel2}</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="ads-chart" role="img" aria-label="Budget par type">Données publicitaires.</canvas></div>
+    </div>
+    <div class="card">
+      <div class="ct">Publications boostées — ${periodLabel2}</div>
+      <div class="tbl-wrap"><table class="t">
+        <thead><tr><th>Plateforme</th><th style="text-align:left;min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table></div>
     </div>`
 }
 
-function drawAdsChart(data) {
+function drawAdsChart(rows) {
   const ctx = document.getElementById('ads-chart'); if(!ctx) return
-  const top = data.slice(0,12)
-  const labels = top.map(r=>{
-    const n=(r.campaign_name||'').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').trim()
-    return n.substring(0,20)+(n.length>20?'…':'')
+  // Agréger budget par type + date de fin
+  const byType = {}
+  rows.forEach(r => {
+    const type = r._type || 'Divers'
+    const label = `${type}\n${fmtD(r.date_stop)}`
+    if(!byType[label]) byType[label] = {type, spend:0}
+    byType[label].spend += parseFloat(r.spend)||0
   })
+  const labels = Object.keys(byType)
+  const values = labels.map(l=>parseFloat(byType[l].spend.toFixed(2)))
+  const colorMap = {
+    'Apéro Quiz':'#EF9F27','Apéro Concert':'#EF9F27','Beer Pong':'#EF9F27',
+    'Club Mix':'#EF9F27','Fléchettes':'#EF9F27',
+    'Karaoke':'#1D9E75','Sport':'#1D9E75','Crush':'#1D9E75',
+    'SBK':'#1D9E75','Comedy Club':'#1D9E75','Flash Tattoo':'#1D9E75','Poker':'#1D9E75',
+    'Soirée':'#E24B4A','Divers':'#378ADD',
+  }
+  const colors = labels.map(l=>colorMap[byType[l].type]||'#888')
   if(charts['ads']) charts['ads'].destroy()
   charts['ads'] = new Chart(ctx, {
     type:'bar',
-    data:{
-      labels,
-      datasets:[
-        {label:'Budget (€)',data:top.map(r=>parseFloat(r.spend)||0),backgroundColor:'rgba(55,138,221,0.7)',yAxisID:'y'},
-        {label:'Couverture',data:top.map(r=>parseInt(r.reach)||0),type:'line',borderColor:'#1D9E75',backgroundColor:'transparent',yAxisID:'y2',tension:0.3,pointRadius:3}
-      ]
-    },
+    data:{ labels, datasets:[{ label:'Budget (€)', data:values, backgroundColor:colors }] },
     options:{
-      responsive:true,maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
         x:{ticks:{font:{size:9},maxRotation:45,autoSkip:false},grid:{display:false}},
-        y:{ticks:{font:{size:10},callback:v=>v+'€'},grid:{color:'rgba(128,128,128,0.1)'},position:'left'},
-        y2:{ticks:{font:{size:10},callback:v=>fmt(v)},position:'right',grid:{display:false}}
+        y:{ticks:{font:{size:10},callback:v=>v+'€'},grid:{color:'rgba(128,128,128,0.1)'}}
       }
     }
   })
@@ -599,14 +703,14 @@ function renderPageTab(data, pdv) {
       <div class="kc"><div class="kl">Nom de la page</div><div class="kv" style="font-size:14px">${data.name||'—'}</div></div>
     </div>
     <div class="card" style="margin-top:1rem">
-      <div class="info-box">Les publications organiques (posts, stories, engagement) nécessitent une validation Meta supplémentaire. Seules les métriques de la page sont disponibles pour l'instant.</div>
+      <div class="info-box">Les publications organiques nécessitent une validation Meta supplémentaire. Seules les métriques de la page sont disponibles.</div>
     </div>`
 }
 
 // ── TAB GMB ────────────────────────────────────────────────────────────────
 function renderGMBTab(data, pdv) {
   if(!pdv.gmb_place_id) return `<div class="card"><div class="warn-box">Place ID Google non configuré.</div></div>`
-  if(!pdv.gmb_api_key) return `<div class="card"><div class="warn-box">Clé API Google manquante. Ajoutez-la dans la configuration pour accéder aux données GMB.</div></div>`
+  if(!pdv.gmb_api_key) return `<div class="card"><div class="warn-box">Clé API Google manquante.</div></div>`
   if(!data) return `<div class="card"><p class="empty">Aucune donnée GMB.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur Google :</strong> ${data.error}</div></div>`
   const reviews = data.reviews||[]
@@ -614,20 +718,19 @@ function renderGMBTab(data, pdv) {
     <div class="kgrid" style="margin-bottom:1.25rem">
       <div class="kc"><div class="kl">Note moyenne</div><div class="kv">${data.rating?data.rating.toFixed(1)+' / 5':'—'}</div></div>
       <div class="kc"><div class="kl">Nombre d'avis</div><div class="kv">${fmt(data.user_ratings_total)}</div></div>
-      <div class="kc"><div class="kl">Avis sans réponse</div><div class="kv" style="color:var(--red)">${reviews.filter(r=>!r.reviewReply).length}</div></div>
+      <div class="kc"><div class="kl">Sans réponse</div><div class="kv" style="color:var(--red)">${reviews.filter(r=>!r.reviewReply).length}</div></div>
     </div>
     <div class="card">
       <div class="ct">Avis récents</div>
       ${reviews.length===0?'<p class="empty">Aucun avis.</p>':
       reviews.slice(0,8).map(r=>{
         const stars='★'.repeat({'ONE':1,'TWO':2,'THREE':3,'FOUR':4,'FIVE':5}[r.rating]||0)+'☆'.repeat(5-({'ONE':1,'TWO':2,'THREE':3,'FOUR':4,'FIVE':5}[r.rating]||0))
-        const replied=!!r.reviewReply
         return `<div style="padding:10px;border-radius:var(--r);border:0.5px solid var(--bd);background:var(--bg3);margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-size:13px;font-weight:500">${r.authorAttribution?.displayName||r.author_name||'Anonyme'}</span>
             <div style="display:flex;gap:6px;align-items:center">
               <span style="color:var(--amber);font-size:13px">${stars}</span>
-              ${replied?'<span class="badge bg">Répondu</span>':'<span class="badge br">Sans réponse</span>'}
+              ${r.reviewReply?'<span class="badge bg">Répondu</span>':'<span class="badge br">Sans réponse</span>'}
             </div>
           </div>
           <div style="font-size:12px;color:var(--tx2)">${(r.text||r.originalText?.text||'(sans commentaire)').substring(0,200)}</div>
@@ -644,7 +747,6 @@ function changePeriod(pdvId, period) {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 buildSidebar(null)
-renderAccueil()
 </script>
 </body>
 </html>
