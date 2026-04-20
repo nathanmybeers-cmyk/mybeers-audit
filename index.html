@@ -277,10 +277,9 @@ function dureeBadge(duree, type, objectif) {
   if(duree==='—') return '<span style="color:var(--tx3)">—</span>'
   let min = DUREE_MIN[type]
   if(type==='Soirée') min = objectif==='Événement' ? 14 : 5
-  if(min === undefined) return `${duree}j`
+  if(min === undefined) return `<span class="badge bb">${duree} jours</span>`
   const ok = duree >= min
-  const color = ok ? 'var(--green)' : 'var(--red)'
-  return `<span style="font-weight:500;color:${color}">${duree}j</span>`
+  return `<span class="badge ${ok?'bg':'br'}">${duree} jours</span>`
 }
 
 function objBadge(objLabel) {
@@ -462,7 +461,7 @@ async function loadAds(pdv, force, period) {
         status: camp.status || '—'
       }
     })
-    // Trier du plus récent au plus ancien
+    // Trier du plus proche d'aujourd'hui au plus ancien
     merged.sort((a,b) => (b.date_start||'').localeCompare(a.date_start||''))
     DB.setCache(pdv.id, cacheKey, merged); return merged
   } catch(e){ return {error:e.message} }
