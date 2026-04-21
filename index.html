@@ -161,13 +161,71 @@ function doLogout() {
   document.getElementById('l-pass').value=''
 }
 
-function showApp() {
+// ── SUPABASE CONFIG ────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://kndaguwcpypcmjpkxpbw.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZGFndXdjcHlwY21qcGt4cGJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NDk2OTUsImV4cCI6MjA5MjMyNTY5NX0.GIcXljp3p4YHIJI5vWzc_vY8xglu_rhit1cWZ1U5WHo'
+
+async function supabaseFetch(path, options={}) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      ...options.headers
+    },
+    ...options
+  })
+  if(!r.ok) throw new Error(`Supabase ${r.status}`)
+  return r.json()
+}
+
+async function loadConfigFromSupabase() {
+  try {
+    const data = await supabaseFetch('etablissements?select=*&order=nom')
+    return data || []
+  } catch(e) {
+    console.warn('Erreur Supabase:', e.message)
+    return null
+  }
+}
+
+async function saveConfigToSupabase(pdv) {
+  const {id, ...fields} = pdv
+  try {
+    // Upsert (insert ou update)
+    await supabaseFetch('etablissements?on_conflict=id', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({id, ...fields})
+    })
+    return true
+  } catch(e) {
+    console.warn('Erreur sauvegarde Supabase:', e.message)
+    return false
+  }
+}
+
+async function deleteConfigFromSupabase(id) {
+  try {
+    await supabaseFetch(`etablissements?id=eq.${id}`, { method: 'DELETE' })
+    return true
+  } catch(e) { return false }
+}
+
+let sheetConfig = null
+
+async function showApp() {
   document.getElementById('login-wrap').style.display='none'
   document.getElementById('app').style.display='flex'
   document.getElementById('role-label').textContent = currentRole === 'admin' ? 'Admin' : 'Animateur'
   const cfgNav = document.getElementById('nav-config')
   if(currentRole !== 'admin') cfgNav.style.display='none'
   else cfgNav.style.display='block'
+
+  document.getElementById('pdv-list').innerHTML = '<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Chargement...</div>'
+  const fromSupabase = await loadConfigFromSupabase()
+  sheetConfig = (fromSupabase && fromSupabase.length > 0) ? fromSupabase : DB.cfg
   buildSidebar(null)
   renderAccueil()
 }
@@ -289,7 +347,7 @@ function objBadge(objLabel) {
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
 function buildSidebar(activePdv) {
-  const cfg = DB.cfg
+  const cfg = sheetConfig || DB.cfg
   const el = document.getElementById('pdv-list')
   if(!cfg.length){ el.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Aucun établissement</div>'; return }
   el.innerHTML = cfg.map(p => {
@@ -317,7 +375,7 @@ document.querySelectorAll('.ni[data-v]').forEach(el=>el.addEventListener('click'
 
 // ── ACCUEIL ────────────────────────────────────────────────────────────────
 function renderAccueil() {
-  const cfg = DB.cfg
+  const cfg = sheetConfig || DB.cfg
   document.getElementById('main').innerHTML = `
     <div class="topbar"><h1>Tableau de bord réseau</h1></div>
     <div class="kgrid">
@@ -346,7 +404,7 @@ function renderAccueil() {
 // ── CONFIG (admin seulement) ───────────────────────────────────────────────
 function renderConfig(editId) {
   if(currentRole !== 'admin'){ renderAccueil(); return }
-  const cfg = DB.cfg
+  const cfg = sheetConfig || DB.cfg
   document.getElementById('main').innerHTML = `
     <div class="topbar"><h1>Gérer les établissements</h1>
       <button class="btn btn-primary" onclick="showForm()">+ Ajouter</button>
@@ -375,7 +433,7 @@ function renderConfig(editId) {
 }
 
 function showForm(id) {
-  const p = id ? DB.cfg.find(x=>x.id===id) : null
+  const p = id ? (sheetConfig || DB.cfg).find(x=>x.id===id) : null
   document.getElementById('form-zone').innerHTML = `
     <div class="card" style="margin-bottom:1rem">
       <div class="ct">${p?`Modifier — ${p.nom}`:'Nouvel établissement'}</div>
@@ -405,11 +463,13 @@ function showForm(id) {
     </div>`
 }
 
-function savePDV(existingId) {
+async function savePDV(existingId) {
   const nom = document.getElementById('cf-nom').value.trim()
   if(!nom){ document.getElementById('cf-msg').textContent='Le nom est obligatoire.'; return }
-  const cfg = DB.cfg
+  document.getElementById('cf-msg').textContent='Enregistrement...'
+  document.getElementById('cf-msg').style.color='var(--tx2)'
   const obj = {
+    id: existingId || 'pdv_'+Date.now(),
     nom, ville: document.getElementById('cf-ville').value.trim(),
     fb_page_id: document.getElementById('cf-fbid').value.trim(),
     ad_account_id: document.getElementById('cf-adid').value.trim(),
@@ -418,14 +478,22 @@ function savePDV(existingId) {
     gmb_place_id: document.getElementById('cf-gmbid').value.trim(),
     gmb_api_key: document.getElementById('cf-gmbkey').value.trim()
   }
-  if(existingId){ const i=cfg.findIndex(x=>x.id===existingId); if(i!==-1){ cfg[i]={...cfg[i],...obj}; DB.clearCache(existingId) } }
-  else { obj.id='pdv_'+Date.now(); cfg.push(obj) }
-  DB.cfg=cfg; buildSidebar(null); renderConfig()
+  const ok = await saveConfigToSupabase(obj)
+  if(!ok){ document.getElementById('cf-msg').textContent='Erreur lors de la sauvegarde.'; document.getElementById('cf-msg').style.color='var(--red)'; return }
+  if(existingId) DB.clearCache(existingId)
+  // Recharger depuis Supabase
+  const fresh = await loadConfigFromSupabase()
+  if(fresh) sheetConfig = fresh
+  buildSidebar(null); renderConfig()
 }
 
-function deletePDV(id) {
+async function deletePDV(id) {
   if(!confirm('Supprimer cet établissement ?')) return
-  DB.cfg=DB.cfg.filter(x=>x.id!==id); DB.clearCache(id); buildSidebar(null); renderConfig()
+  await deleteConfigFromSupabase(id)
+  DB.clearCache(id)
+  const fresh = await loadConfigFromSupabase()
+  if(fresh) sheetConfig = fresh
+  buildSidebar(null); renderConfig()
 }
 
 // ── LOAD DATA ──────────────────────────────────────────────────────────────
@@ -502,7 +570,7 @@ let charts = {}
 let currentPeriod = '30d'
 
 async function renderDash(pdvId, force, period) {
-  const pdv = DB.cfg.find(x=>x.id===pdvId)
+  const pdv = (sheetConfig || DB.cfg).find(x=>x.id===pdvId)
   if(!pdv) return
   if(period) currentPeriod = period
   Object.values(charts).forEach(c=>{ try{c.destroy()}catch(e){} }); charts={}
