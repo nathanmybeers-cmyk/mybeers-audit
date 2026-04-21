@@ -276,8 +276,9 @@ const TYPE_DEFS = [
   {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl']},
   {label:'Karaoke',       keys:['karaoké','karaoke']},
   {label:'SBK',           keys:['sbk']},
+  {label:'Open Mix',      keys:['open mix']},
   {label:'Club Mix',      keys:['club mix']},
-  {label:'Crush',         keys:['crush']},
+  {label:'Crush',         keys:['crush','célib','celib']},
   {label:'Beer Pong',     keys:['beer pong','pong','championnat']},
   {label:'Sport',         keys:['vs ','versus','match','foot','rugby']},
   {label:'Comedy Club',   keys:['stand-up','stand up','comedy']},
@@ -288,7 +289,7 @@ const TYPE_DEFS = [
 // Couleurs par type (badge class)
 const TYPE_COLORS = {
   'Apéro Quiz':    'ba', 'Apéro Concert': 'ba', 'Beer Pong':   'ba',
-  'Club Mix':      'ba', 'Fléchettes':    'ba',
+  'Club Mix':      'ba', 'Fléchettes':    'ba', 'Open Mix':    'ba',
   'Karaoke':       'bg', 'Sport':         'bg', 'Crush':       'bg',
   'SBK':           'bg', 'Comedy Club':   'bg', 'Flash Tattoo':'bg', 'Poker': 'bg',
   'Soirée':        'br',
@@ -297,7 +298,7 @@ const TYPE_COLORS = {
 
 // Durée minimale en vert par type
 const DUREE_MIN = {
-  'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Fléchettes':4,'SBK':4,
+  'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,
   'Crush':4,'Sport':2,'Karaoke':5,'Comedy Club':4,'Divers':2,'Poker':5,
   'Beer Pong':7,'Flash Tattoo':4,
 }
@@ -330,7 +331,13 @@ function computeTypes(rows) {
   const result = rows.map(r => {
     const isFriday = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
     const found = detectType(r.campaign_name||'')
-    return {...r, _type: found || (isFriday ? 'Soirée' : 'Divers')}
+    let type = found || (isFriday ? 'Soirée' : 'Divers')
+    // Règle spéciale : Célib détecté mais boost finit un vendredi → Soirée
+    const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
+    if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
+      type = 'Soirée'
+    }
+    return {...r, _type: type}
   })
   // 2ème passage héritage
   const map = {}
