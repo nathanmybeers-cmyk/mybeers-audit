@@ -789,7 +789,12 @@ function renderAdsTab(data, pdv, allData) {
       <td>${fmt(r.reach)}</td>
       <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
       <td>${fmtE(r.spend)}</td>
-      <td>${r.daily_budget ? fmtE(r.daily_budget) : r.lifetime_budget ? fmtE(r.lifetime_budget) : '—'}</td>
+      <td>${(()=>{
+        if(r.lifetime_budget) return fmtE(r.lifetime_budget)
+        if(r.daily_budget && duree!=='—') return fmtE(r.daily_budget * duree)
+        if(r.daily_budget) return fmtE(r.daily_budget) + '/j'
+        return '—'
+      })()}</td>
       <td>${objBadge(objLabel)}</td>
       <td style="font-weight:500">${fmt(resultVal)}</td>
       <td>${fmt(getAction(r.actions,'post'))}</td>
