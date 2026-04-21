@@ -529,7 +529,7 @@ async function loadAds(pdv, force, period) {
   const cacheKey = 'ads_' + (period||'30d')
   if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
   try {
-    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,promoted_object{page_id}&limit=100`
+    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&limit=100`
     while(curl) {
       const d = await fetchMeta(curl, pdv.fb_token)
       campaigns = campaigns.concat(d.data||[])
@@ -564,7 +564,10 @@ async function loadAds(pdv, force, period) {
         date_start: camp.start_time ? camp.start_time.split('T')[0] : null,
         date_stop: camp.stop_time ? camp.stop_time.split('T')[0] : null,
         status: camp.status || '—',
-        effective_status: camp.effective_status || camp.status || '—'
+        effective_status: camp.effective_status || camp.status || '—',
+        daily_budget: camp.daily_budget ? parseInt(camp.daily_budget)/100 : null,
+        lifetime_budget: camp.lifetime_budget ? parseInt(camp.lifetime_budget)/100 : null,
+        budget_remaining: camp.budget_remaining ? parseInt(camp.budget_remaining)/100 : null
       }
     })
 
@@ -786,6 +789,7 @@ function renderAdsTab(data, pdv, allData) {
       <td>${fmt(r.reach)}</td>
       <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
       <td>${fmtE(r.spend)}</td>
+      <td>${r.daily_budget ? fmtE(r.daily_budget) : r.lifetime_budget ? fmtE(r.lifetime_budget) : '—'}</td>
       <td>${objBadge(objLabel)}</td>
       <td style="font-weight:500">${fmt(resultVal)}</td>
       <td>${fmt(getAction(r.actions,'post'))}</td>
@@ -811,7 +815,7 @@ function renderAdsTab(data, pdv, allData) {
     <div class="card">
       <div class="ct">Publications boostées — ${periodLabel2}</div>
       <div class="tbl-wrap"><table class="t">
-        <thead><tr><th>Statut</th><th>Plateforme</th><th style="text-align:left;min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
+        <thead><tr><th>Statut</th><th>Plateforme</th><th style="text-align:left;min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Montant dépensé</th><th>Budget total</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table></div>
     </div>`
