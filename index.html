@@ -473,6 +473,7 @@ function showForm(id) {
         <div><label>ID compte publicitaire</label><input id="cf-adid" value="${p?.ad_account_id||''}" placeholder="Ex : act_346792040096064"></div>
       </div>
       <div style="margin-bottom:10px"><label>Token d'accès Meta (longue durée)</label><input id="cf-token" class="token-field" value="${p?.fb_token||''}" placeholder="EAAZCDhr..."></div>
+      <div style="margin-bottom:10px"><label>Token de page Facebook <span style="font-weight:400;color:var(--tx2)">(pour les données organiques)</span></label><input id="cf-page-token" class="token-field" value="${p?.page_token||''}" placeholder="EAFyHu7..."></div>
       <div style="margin-bottom:10px"><label>Page ID de filtrage <span style="font-weight:400;color:var(--tx2)">(pour filtrer les campagnes de cette page uniquement)</span></label><input id="cf-filter-page" value="${p?.filter_page_id||''}" placeholder="Ex : 609686032238115 — même valeur que Page ID Facebook si compte pub partagé"></div>
       <div class="sep"></div>
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">Google My Business</div>
@@ -499,6 +500,7 @@ async function savePDV(existingId) {
     fb_page_id: document.getElementById('cf-fbid').value.trim(),
     ad_account_id: document.getElementById('cf-adid').value.trim(),
     fb_token: document.getElementById('cf-token').value.trim(),
+    page_token: document.getElementById('cf-page-token').value.trim(),
     filter_page_id: document.getElementById('cf-filter-page').value.trim(),
     gmb_place_id: document.getElementById('cf-gmbid').value.trim(),
     gmb_api_key: document.getElementById('cf-gmbkey').value.trim()
@@ -586,6 +588,19 @@ async function loadAds(pdv, force, period) {
   } catch(e){ return {error:e.message} }
 }
 
+async function loadOrganic(pdv, force) {
+  if(!pdv.page_token || !pdv.fb_page_id) return null
+  if(!force){ const c=DB.getCache(pdv.id,'organic'); if(c) return c }
+  try {
+    const [posts, insights] = await Promise.all([
+      fetchMeta(`${pdv.fb_page_id}/posts?fields=message,created_time,reactions.summary(true),comments.summary(true),shares&limit=20`, pdv.page_token),
+      fetchMeta(`${pdv.fb_page_id}/insights?metric=page_post_engagements,page_impressions_unique,page_views_total&period=day`, pdv.page_token)
+    ])
+    const data = { posts: posts.data||[], insights: insights.data||[] }
+    DB.setCache(pdv.id,'organic',data); return data
+  } catch(e){ return {error:e.message} }
+}
+
 async function loadPage(pdv, force) {
   if(!pdv.fb_page_id || !pdv.fb_token) return null
   if(!force){ const c=DB.getCache(pdv.id,'page'); if(c) return c }
@@ -628,11 +643,12 @@ async function renderDash(pdvId, force, period) {
     <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
 
   // Toujours charger toutes les données pour construire le select complet
-  const [ads, adsAll, page, gmb] = await Promise.all([
+  const [ads, adsAll, page, gmb, organic] = await Promise.all([
     loadAds(pdv, force, currentPeriod),
     loadAds(pdv, false, 'max'),
     loadPage(pdv, force),
-    loadGMB(pdv, force)
+    loadGMB(pdv, force),
+    loadOrganic(pdv, force)
   ])
 
   const cEl = document.getElementById('cache-ts')
@@ -644,10 +660,12 @@ async function renderDash(pdvId, force, period) {
   body.innerHTML = `
     <div class="tabs">
       <div class="tab active" onclick="showTab(this,'t-ads')">Publications boostées</div>
+      <div class="tab" onclick="showTab(this,'t-organic')">Organique</div>
       <div class="tab" onclick="showTab(this,'t-page')">Page Facebook</div>
       ${pdv.gmb_place_id?'<div class="tab" onclick="showTab(this,\'t-gmb\')">Google My Business</div>':''}
     </div>
     <div id="t-ads">${renderAdsTab(ads, pdv, adsAll)}</div>
+    <div id="t-organic" style="display:none">${renderOrganicTab(organic, pdv)}</div>
     <div id="t-page" style="display:none">${renderPageTab(page, pdv)}</div>
     ${pdv.gmb_place_id?`<div id="t-gmb" style="display:none">${renderGMBTab(gmb, pdv)}</div>`:''}
   `
@@ -656,7 +674,7 @@ async function renderDash(pdvId, force, period) {
 
 function showTab(el, id) {
   document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active')
-  ;['t-ads','t-page','t-gmb'].forEach(i=>{ const e=document.getElementById(i); if(e) e.style.display=i===id?'block':'none' })
+  ;['t-ads','t-organic','t-page','t-gmb'].forEach(i=>{ const e=document.getElementById(i); if(e) e.style.display=i===id?'block':'none' })
 }
 
 // ── FILTERING ──────────────────────────────────────────────────────────────
@@ -832,6 +850,52 @@ function drawAdsChart(rows) {
       }
     }
   })
+}
+
+// ── TAB ORGANIQUE ──────────────────────────────────────────────────────────
+function renderOrganicTab(data, pdv) {
+  if(!pdv.page_token) return `<div class="card"><div class="warn-box">Token de page non configuré.<br><strong>→ Ajoutez le token de page dans la configuration pour accéder aux données organiques.</strong></div></div>`
+  if(!data) return `<div class="card"><p class="empty">Aucune donnée organique.</p></div>`
+  if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur :</strong> ${data.error}</div></div>`
+
+  const posts = data.posts || []
+  const insights = data.insights || []
+  const engagements = insights.find(i=>i.name==='page_post_engagements')
+  const reach = insights.find(i=>i.name==='page_impressions_unique')
+  const views = insights.find(i=>i.name==='page_views_total')
+  const lastEng = engagements?.values?.slice(-1)[0]?.value || 0
+  const lastReach = reach?.values?.slice(-1)[0]?.value || 0
+  const lastViews = views?.values?.slice(-1)[0]?.value || 0
+
+  return `
+    <div class="kgrid" style="margin-bottom:1.25rem">
+      <div class="kc"><div class="kl">Engagements (hier)</div><div class="kv">${fmt(lastEng)}</div></div>
+      <div class="kc"><div class="kl">Portée unique (hier)</div><div class="kv">${fmt(lastReach)}</div></div>
+      <div class="kc"><div class="kl">Vues de la page (hier)</div><div class="kv">${fmt(lastViews)}</div></div>
+      <div class="kc"><div class="kl">Posts récupérés</div><div class="kv">${posts.length}</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">Dernières publications organiques</div>
+      ${posts.length===0?'<p class="empty">Aucune publication.</p>':
+      posts.map(p=>{
+        const msg = (p.message||'(sans texte)').substring(0,120) + ((p.message||'').length>120?'…':'')
+        const date = p.created_time ? new Date(p.created_time).toLocaleDateString('fr-FR') : '—'
+        const reactions = p.reactions?.summary?.total_count || 0
+        const comments = p.comments?.summary?.total_count || 0
+        const shares = p.shares?.count || 0
+        return `<div style="padding:10px;border-radius:var(--r);border:0.5px solid var(--bd);background:var(--bg3);margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--tx3)">${date}</span>
+            <div style="display:flex;gap:12px;font-size:12px">
+              <span>❤️ ${fmt(reactions)}</span>
+              <span>💬 ${fmt(comments)}</span>
+              <span>↗️ ${fmt(shares)}</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.5">${msg}</div>
+        </div>`
+      }).join('')}
+    </div>`
 }
 
 // ── TAB PAGE ───────────────────────────────────────────────────────────────
