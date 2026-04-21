@@ -555,6 +555,21 @@ async function loadAds(pdv, force, period) {
         effective_status: camp.effective_status || camp.status || '—'
       }
     })
+
+    // Récupérer les dépenses d'hier pour détecter les campagnes actives non diffusées
+    try {
+      const yesterday = await fetchMeta(`${pdv.ad_account_id}/insights?fields=campaign_id,spend&date_preset=yesterday&level=campaign&limit=200`, pdv.fb_token)
+      const yesterdaySpend = new Set((yesterday.data||[]).filter(r=>parseFloat(r.spend)>0).map(r=>r.campaign_id))
+      const today = new Date(); today.setHours(0,0,0,0)
+      merged.forEach(r => {
+        const stopDate = r.date_stop ? new Date(r.date_stop) : null
+        const isCurrentlyActive = r.status==='ACTIVE' && stopDate && stopDate >= today
+        if(isCurrentlyActive && !yesterdaySpend.has(r.campaign_id)) {
+          r.effective_status = 'NOT_DELIVERING'
+        }
+      })
+    } catch(e) { console.warn('Impossible de vérifier les dépenses hier:', e.message) }
+
     // Trier du plus proche d'aujourd'hui au plus ancien
     merged.sort((a,b) => (b.date_start||'').localeCompare(a.date_start||''))
     DB.setCache(pdv.id, cacheKey, merged); return merged
@@ -725,17 +740,17 @@ function renderAdsTab(data, pdv, allData) {
     const today = new Date(); today.setHours(0,0,0,0)
     const stopDate = r.date_stop ? new Date(r.date_stop) : null
     const isExpired = stopDate && stopDate < today
-    const isActive = !isExpired && effStatus === 'ACTIVE'
-    const isAnomalie = !isExpired && ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
-    const statutBadge = isActive
-      ? `<span class="badge bg">En cours</span>`
-      : isAnomalie
-        ? `<span class="badge br">Anomalie</span>`
+    const isAnomalie = ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
+    const isActive = !isAnomalie && !isExpired && effStatus === 'ACTIVE'
+    const statutBadge = isAnomalie
+      ? `<span class="badge br">Anomalie</span>`
+      : isActive
+        ? `<span class="badge bg">En cours</span>`
         : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
-    const rowBg = isActive
-      ? 'background:rgba(29,158,117,0.06)'
-      : isAnomalie
-        ? 'background:rgba(226,75,74,0.06)'
+    const rowBg = isAnomalie
+      ? 'background:rgba(226,75,74,0.06)'
+      : isActive
+        ? 'background:rgba(29,158,117,0.06)'
         : ''
     // Badge plateforme
     const platBadge = isIG
