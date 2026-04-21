@@ -517,7 +517,7 @@ async function loadAds(pdv, force, period) {
   const cacheKey = 'ads_' + (period||'30d')
   if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
   try {
-    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,promoted_object{page_id}&limit=100`
+    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,promoted_object{page_id}&limit=100`
     while(curl) {
       const d = await fetchMeta(curl, pdv.fb_token)
       campaigns = campaigns.concat(d.data||[])
@@ -551,7 +551,8 @@ async function loadAds(pdv, force, period) {
         campaign_name: camp.name || r.campaign_id || '—',
         date_start: camp.start_time ? camp.start_time.split('T')[0] : null,
         date_stop: camp.stop_time ? camp.stop_time.split('T')[0] : null,
-        status: camp.status || '—'
+        status: camp.status || '—',
+        effective_status: camp.effective_status || camp.status || '—'
       }
     })
     // Trier du plus proche d'aujourd'hui au plus ancien
@@ -719,11 +720,28 @@ function renderAdsTab(data, pdv, allData) {
     const objLabel = objMap[r.objective]||r.objective||'—'
     const resultVal = resultMap_fn(r, r.objective)
     const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : '—'
+    // Statut de la campagne
+    const effStatus = r.effective_status || r.status || ''
+    const isActive = effStatus === 'ACTIVE'
+    const isAnomalie = ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
+    const isTermine = !isActive && !isAnomalie
+    const statutLabel = isActive ? 'En cours' : isAnomalie ? 'Anomalie' : 'Terminé'
+    const statutBadge = isActive
+      ? `<span class="badge bg">En cours</span>`
+      : isAnomalie
+        ? `<span class="badge br">Anomalie</span>`
+        : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
+    const rowBg = isActive
+      ? 'background:rgba(29,158,117,0.06)'
+      : isAnomalie
+        ? 'background:rgba(226,75,74,0.06)'
+        : ''
     // Badge plateforme
     const platBadge = isIG
       ? `<span class="badge bpi">Instagram</span>`
       : `<span class="badge bb">Facebook</span>`
-    return `<tr>
+    return `<tr style="${rowBg}">
+      <td>${statutBadge}</td>
       <td>${platBadge}</td>
       <td class="tal" title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
       <td><span class="badge ${tc}">${type}</span></td>
@@ -758,7 +776,7 @@ function renderAdsTab(data, pdv, allData) {
     <div class="card">
       <div class="ct">Publications boostées — ${periodLabel2}</div>
       <div class="tbl-wrap"><table class="t">
-        <thead><tr><th>Plateforme</th><th style="text-align:left;min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
+        <thead><tr><th>Statut</th><th>Plateforme</th><th style="text-align:left;min-width:180px">Publication</th><th>Type</th><th>Début</th><th>Fin</th><th>Durée</th><th>Couverture</th><th>Interactions</th><th>Budget</th><th>Objectif</th><th>Résultat</th><th>Partages</th><th>Réactions</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table></div>
     </div>`
