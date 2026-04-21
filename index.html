@@ -112,6 +112,11 @@ table.t tr:hover td{background:var(--bg3)}
       <div><label>Mot de passe</label><input id="l-pass" type="password" placeholder="Votre mot de passe" autocomplete="current-password"></div>
       <button class="btn btn-primary" onclick="doLogin()" style="width:100%;padding:10px">Se connecter</button>
     </div>
+    <div style="text-align:center;margin-top:.5rem">
+      <a href="/privacy.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 8px">Politique de confidentialité</a>
+      <a href="/terms.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 8px">Conditions de service</a>
+      <a href="/deletion.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 8px">Suppression des données</a>
+    </div>
   </div>
 </div>
 
@@ -736,22 +741,13 @@ function renderAdsTab(data, pdv, allData) {
     const resultVal = resultMap_fn(r, r.objective)
     const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : '—'
     // Statut de la campagne
-    const effStatus = r.effective_status || r.status || ''
     const today = new Date(); today.setHours(0,0,0,0)
     const stopDate = r.date_stop ? new Date(r.date_stop) : null
-    const isExpired = stopDate && stopDate < today
-    const isAnomalie = ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
-    const isActive = !isAnomalie && !isExpired && effStatus === 'ACTIVE'
-    const statutBadge = isAnomalie
-      ? `<span class="badge br">Anomalie</span>`
-      : isActive
-        ? `<span class="badge bg">En cours</span>`
-        : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
-    const rowBg = isAnomalie
-      ? 'background:rgba(226,75,74,0.06)'
-      : isActive
-        ? 'background:rgba(29,158,117,0.06)'
-        : ''
+    const isActive = r.status==='ACTIVE' && stopDate && stopDate >= today
+    const statutBadge = isActive
+      ? `<span class="badge bg">En cours</span>`
+      : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
+    const rowBg = isActive ? 'background:rgba(29,158,117,0.06)' : ''
     // Badge plateforme
     const platBadge = isIG
       ? `<span class="badge bpi">Instagram</span>`
