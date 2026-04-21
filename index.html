@@ -722,10 +722,11 @@ function renderAdsTab(data, pdv, allData) {
     const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : '—'
     // Statut de la campagne
     const effStatus = r.effective_status || r.status || ''
-    const isActive = effStatus === 'ACTIVE'
-    const isAnomalie = ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
-    const isTermine = !isActive && !isAnomalie
-    const statutLabel = isActive ? 'En cours' : isAnomalie ? 'Anomalie' : 'Terminé'
+    const today = new Date(); today.setHours(0,0,0,0)
+    const stopDate = r.date_stop ? new Date(r.date_stop) : null
+    const isExpired = stopDate && stopDate < today
+    const isActive = !isExpired && effStatus === 'ACTIVE'
+    const isAnomalie = !isExpired && ['PAUSED','NOT_DELIVERING','WITH_ISSUES','DISAPPROVED','PENDING_REVIEW'].includes(effStatus)
     const statutBadge = isActive
       ? `<span class="badge bg">En cours</span>`
       : isAnomalie
