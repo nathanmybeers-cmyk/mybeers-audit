@@ -941,13 +941,17 @@ function renderAdsTab(data, pdv, allData) {
       const objRatio = objRows.length > 0 ? objVert/objRows.length : null
 
       const synthBlock = (ratio, labels, icon) => {
-        if(ratio === null) return `<div class="kc"><div class="kl">${icon}</div><div class="kv" style="font-size:14px;color:var(--tx3)">—</div></div>`
+        if(ratio === null) return `<div class="kc" style="text-align:center;padding:1.5rem"><div class="kl" style="font-weight:700;font-size:13px;margin-bottom:8px">${icon}</div><div class="kv" style="font-size:14px;color:var(--tx3)">—</div></div>`
         let cls, txt
         if(ratio >= 0.9) { cls='bg'; txt=labels[0] }
         else if(ratio >= 0.6) { cls='ba'; txt=labels[1] }
         else { cls='br'; txt=labels[2] }
         const pct = Math.round(ratio*100)
-        return `<div class="kc"><div class="kl">${icon}</div><div class="kv" style="font-size:15px"><span class="badge ${cls}" style="font-size:13px;padding:4px 12px">${txt}</span></div><div class="ks">${pct}% de vert</div></div>`
+        return `<div class="kc" style="text-align:center;padding:1.5rem">
+          <div class="kl" style="font-weight:700;font-size:13px;margin-bottom:12px">${icon}</div>
+          <div style="margin-bottom:8px"><span class="badge ${cls}" style="font-size:14px;padding:6px 16px">${txt}</span></div>
+          <div class="ks" style="font-size:12px">${pct}% de vert</div>
+        </div>`
       }
 
       return `<div class="kgrid" style="margin-bottom:1.25rem">
