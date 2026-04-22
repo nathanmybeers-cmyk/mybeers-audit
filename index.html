@@ -943,8 +943,8 @@ function renderAdsTab(data, pdv, allData) {
       const synthBlock = (ratio, labels, icon) => {
         if(ratio === null) return `<div class="kc" style="text-align:center;padding:1.5rem"><div class="kl" style="font-weight:700;font-size:13px;margin-bottom:8px">${icon}</div><div class="kv" style="font-size:14px;color:var(--tx3)">—</div></div>`
         let cls, txt
-        if(ratio >= 0.9) { cls='bg'; txt=labels[0] }
-        else if(ratio >= 0.6) { cls='ba'; txt=labels[1] }
+        if(ratio >= 0.8) { cls='bg'; txt=labels[0] }
+        else if(ratio >= 0.5) { cls='ba'; txt=labels[1] }
         else { cls='br'; txt=labels[2] }
         const pct = Math.round(ratio*100)
         return `<div class="kc" style="text-align:center;padding:1.5rem">
