@@ -804,6 +804,14 @@ function renderAdsTab(data, pdv, allData) {
     g.ids.forEach(id => { budgetBadgeMap[id] = { cls, total: g.total } })
   })
 
+  // Détecter les types+date_stop avec une seule publication (plateforme manquante)
+  const platGroupMap = {}
+  rows.forEach(r => {
+    const key = `${r._type}_${r.date_stop}`
+    if(!platGroupMap[key]) platGroupMap[key] = []
+    platGroupMap[key].push(r.campaign_id)
+  })
+
   const tableRows = rows.map(r=>{
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,50)
@@ -825,7 +833,6 @@ function renderAdsTab(data, pdv, allData) {
     let budgetDisplay = '—'
     if(budgetTotal !== null) {
       if(type === 'Soirée') {
-        // Soirée : calcul individuel
         let cibleSoiree = null
         if(objLabel === 'Événement') cibleSoiree = 100
         else if(['Interaction','Trafic'].includes(objLabel)) cibleSoiree = 50
@@ -841,9 +848,21 @@ function renderAdsTab(data, pdv, allData) {
       }
     }
     // Badge plateforme
-    const platBadge = isIG
-      ? `<span class="badge bpi">Instagram</span>`
-      : `<span class="badge bb">Facebook</span>`
+    const platKey = `${type}_${r.date_stop}`
+    const platCount = platGroupMap[platKey]?.length || 1
+    let platBadge
+    if(objLabel === 'Événement') {
+      platBadge = `<span class="badge bb">Event FB</span>`
+    } else if(platCount === 1 && type !== 'Soirée') {
+      platBadge = `<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:500">
+        <span style="background:var(--pink-bg);color:var(--pink-tx);padding:2px 6px">Insta</span>
+        <span style="background:var(--blue-bg);color:var(--blue-tx);padding:2px 6px">FB</span>
+      </span>`
+    } else if(isIG) {
+      platBadge = `<span class="badge bpi">Instagram</span>`
+    } else {
+      platBadge = `<span class="badge bb">Facebook</span>`
+    }
     return `<tr style="${rowBg}">
       <td>${statutBadge}</td>
       <td>${platBadge}</td>
