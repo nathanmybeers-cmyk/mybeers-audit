@@ -758,6 +758,52 @@ function renderAdsTab(data, pdv, allData) {
     return m[obj]!==undefined ? m[obj] : '—'
   }
 
+  // ── BUDGET CIBLES ──────────────────────────────────────────────────────────
+  const BUDGET_CIBLE = {
+    'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,
+    'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,
+    'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30
+  }
+
+  // Calculer le budget total par ligne
+  const getBudgetTotal = r => {
+    const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : null
+    if(r.lifetime_budget) return r.lifetime_budget
+    if(r.daily_budget && duree) return r.daily_budget * duree
+    return null
+  }
+
+  // Regrouper les lignes par type + dates pour cumuler les budgets
+  const budgetGroupMap = {}
+  rows.forEach(r => {
+    const objLabel = objMap[r.objective]||r.objective||'—'
+    const type = r._type
+    let cible = null
+    if(type === 'Soirée') {
+      if(objLabel === 'Événement') cible = 100
+      else if(['Interaction','Trafic'].includes(objLabel)) cible = 50
+    } else {
+      cible = BUDGET_CIBLE[type] || null
+    }
+    if(!cible) return
+    const key = `${type}_${r.date_start}_${r.date_stop}`
+    if(!budgetGroupMap[key]) budgetGroupMap[key] = { cible, total: 0, ids: [] }
+    const bt = getBudgetTotal(r)
+    if(bt) budgetGroupMap[key].total += bt
+    budgetGroupMap[key].ids.push(r.campaign_id)
+  })
+
+  // Calculer la couleur par groupe
+  const budgetColorMap = {}
+  Object.values(budgetGroupMap).forEach(g => {
+    const ratio = g.total / g.cible
+    let color
+    if(ratio >= 0.9) color = 'var(--green)'
+    else if(ratio >= 0.7) color = 'var(--amber)'
+    else color = 'var(--red)'
+    g.ids.forEach(id => { budgetColorMap[id] = color })
+  })
+
   const tableRows = rows.map(r=>{
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,50)
@@ -774,6 +820,12 @@ function renderAdsTab(data, pdv, allData) {
       ? `<span class="badge bg">En cours</span>`
       : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
     const rowBg = isActive ? 'background:rgba(44,181,181,0.06)' : ''
+    // Budget total avec couleur
+    const budgetTotal = getBudgetTotal(r)
+    const budgetColor = budgetColorMap[r.campaign_id]
+    const budgetDisplay = budgetTotal !== null
+      ? `<span style="font-weight:500;color:${budgetColor||'var(--tx)'}">${fmtE(budgetTotal)}</span>`
+      : '—'
     // Badge plateforme
     const platBadge = isIG
       ? `<span class="badge bpi">Instagram</span>`
@@ -789,12 +841,7 @@ function renderAdsTab(data, pdv, allData) {
       <td>${fmt(r.reach)}</td>
       <td>${fmt(getAction(r.actions,'post_interaction_net'))}</td>
       <td>${fmtE(r.spend)}</td>
-      <td>${(()=>{
-        if(r.lifetime_budget) return fmtE(r.lifetime_budget)
-        if(r.daily_budget && duree!=='—') return fmtE(r.daily_budget * duree)
-        if(r.daily_budget) return fmtE(r.daily_budget) + '/j'
-        return '—'
-      })()}</td>
+      <td>${budgetDisplay}</td>
       <td>${objBadge(objLabel)}</td>
       <td style="font-weight:500">${fmt(resultVal)}</td>
       <td>${fmt(getAction(r.actions,'post'))}</td>
