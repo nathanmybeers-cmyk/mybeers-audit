@@ -119,11 +119,6 @@ table.t tr:hover td{background:var(--bg3)}
     </div>
   </div>
 </div>
-<div style="position:fixed;bottom:1.5rem;left:0;right:0;text-align:center;z-index:999">
-  <a href="/privacy.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 10px">Politique de confidentialité</a>
-  <a href="/terms.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 10px">Conditions de service</a>
-  <a href="/deletion.html" target="_blank" style="font-size:11px;color:var(--tx3);text-decoration:none;margin:0 10px">Suppression des données</a>
-</div>
 
 <!-- APP -->
 <div class="app" id="app">
@@ -897,6 +892,70 @@ function renderAdsTab(data, pdv, allData) {
       <div class="ct">Budget par type — ${periodLabel2}</div>
       <div class="chart-wrap" style="height:220px"><canvas id="ads-chart" role="img" aria-label="Budget par type">Données publicitaires.</canvas></div>
     </div>
+    ${(()=>{
+      // ── SCORES SYNTHÈSE ──────────────────────────────────────────────────
+      // Durée
+      const dureeRows = rows.filter(r => {
+        const d = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : null
+        const objLabel = objMap[r.objective]||r.objective||'—'
+        return d !== null && DUREE_MIN[r._type] !== undefined || r._type === 'Soirée'
+      })
+      const dureeVert = dureeRows.filter(r => {
+        const d = Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000))
+        const objLabel = objMap[r.objective]||r.objective||'—'
+        let min = DUREE_MIN[r._type]
+        if(r._type==='Soirée') min = objLabel==='Événement' ? 14 : 5
+        return min !== undefined && d >= min
+      }).length
+      const dureeRatio = dureeRows.length > 0 ? dureeVert/dureeRows.length : null
+
+      // Budget
+      const budgetRows = rows.filter(r => {
+        const bt = getBudgetTotal(r)
+        if(!bt) return false
+        const objLabel = objMap[r.objective]||r.objective||'—'
+        if(r._type==='Soirée') return ['Événement','Interaction','Trafic'].includes(objLabel)
+        return BUDGET_CIBLE[r._type] !== undefined
+      })
+      const budgetVert = budgetRows.filter(r => {
+        const entry = budgetBadgeMap[r.campaign_id]
+        if(r._type==='Soirée') {
+          const bt = getBudgetTotal(r)
+          const objLabel = objMap[r.objective]||r.objective||'—'
+          const cible = objLabel==='Événement' ? 100 : 50
+          return bt/cible >= 0.9
+        }
+        return entry && entry.cls === 'bg'
+      }).length
+      const budgetRatio = budgetRows.length > 0 ? budgetVert/budgetRows.length : null
+
+      // Objectif
+      const objRows = rows.filter(r => {
+        const ol = objMap[r.objective]||r.objective||'—'
+        return ol !== '—'
+      })
+      const objVert = objRows.filter(r => {
+        const ol = objMap[r.objective]||r.objective||'—'
+        return ['Interaction','Trafic','Événement'].includes(ol)
+      }).length
+      const objRatio = objRows.length > 0 ? objVert/objRows.length : null
+
+      const synthBlock = (ratio, labels, icon) => {
+        if(ratio === null) return `<div class="kc"><div class="kl">${icon}</div><div class="kv" style="font-size:14px;color:var(--tx3)">—</div></div>`
+        let cls, txt
+        if(ratio >= 0.9) { cls='bg'; txt=labels[0] }
+        else if(ratio >= 0.6) { cls='ba'; txt=labels[1] }
+        else { cls='br'; txt=labels[2] }
+        const pct = Math.round(ratio*100)
+        return `<div class="kc"><div class="kl">${icon}</div><div class="kv" style="font-size:15px"><span class="badge ${cls}" style="font-size:13px;padding:4px 12px">${txt}</span></div><div class="ks">${pct}% de vert</div></div>`
+      }
+
+      return `<div class="kgrid" style="margin-bottom:1.25rem">
+        ${synthBlock(dureeRatio, ['Bonne anticipation','Anticipation moyenne','Mauvaise anticipation'], '⏱ Durée')}
+        ${synthBlock(budgetRatio, ['Budget bon','Budget moyen','Budget insuffisant'], '💰 Budget total')}
+        ${synthBlock(objRatio, ['Objectifs bons','Objectifs moyens','Mauvais objectifs'], '🎯 Objectifs')}
+      </div>`
+    })()}
     <div class="card">
       <div class="ct">Publications boostées — ${periodLabel2}</div>
       <div class="tbl-wrap"><table class="t">
