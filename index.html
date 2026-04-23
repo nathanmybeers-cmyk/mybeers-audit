@@ -394,30 +394,102 @@ function navPDV(id) {
 document.querySelectorAll('.ni[data-v]').forEach(el=>el.addEventListener('click',()=>nav(el.dataset.v)))
 
 // ── ACCUEIL ────────────────────────────────────────────────────────────────
+const SECTEURS = {
+  'Armand':  ['brive','carcassonne','chambray','laval','montargis','montauban','niort','orléans fleury','orléans - fleury','orleans fleury','orléans sud','orleans sud','poitiers','vitré','vitre'],
+  'Marvyn':  ['kingersheim','macon','mâcon','rouen','vendenheim','vesoul'],
+  'Mahfoud': ['aubenas','etoile','étoile','meyzieu','roquebrune','toulon','tournon','vidauban','voiron']
+}
+
+function getAnimateur(pdv) {
+  const nom = (pdv.nom||'').toLowerCase().replace('my beers ','').trim()
+  const ville = (pdv.ville||'').toLowerCase().trim()
+  for(const [anim, villes] of Object.entries(SECTEURS)) {
+    if(villes.some(v => nom.includes(v) || ville.includes(v))) return anim
+  }
+  return 'Non assigné'
+}
+
 function renderAccueil() {
   const cfg = sheetConfig || DB.cfg
+
+  // Grouper par animateur
+  const groupes = {'Armand':[], 'Marvyn':[], 'Mahfoud':[], 'Non assigné':[]}
+  cfg.forEach(p => { groupes[getAnimateur(p)].push(p) })
+
+  const sectorCard = (anim, pdvs) => {
+    if(!pdvs.length) return ''
+    return `<div class="card" style="margin-bottom:1rem">
+      <div class="ct" style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px;font-weight:700">${anim}</span>
+        <span style="font-size:11px;color:var(--tx3)">${pdvs.length} établissement${pdvs.length>1?'s':''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+        ${pdvs.map(p=>`<div onclick="navPDV('${p.id}')" style="cursor:pointer;background:var(--bg3);border-radius:var(--r);padding:10px;border:0.5px solid var(--bd)">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.nom.replace('My Beers ','')}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${p.fb_token&&p.ad_account_id?'<span class="badge bg" style="font-size:10px">Pub</span>':'<span class="badge ba" style="font-size:10px">Sans pub</span>'}
+            ${p.fb_page_id&&p.fb_token?'<span class="badge bb" style="font-size:10px">Page</span>':''}
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`
+  }
+
   document.getElementById('main').innerHTML = `
     <div class="topbar"><h1>Tableau de bord réseau</h1></div>
-    <div class="kgrid">
+    <div class="kgrid" style="margin-bottom:1.25rem">
       <div class="kc"><div class="kl">Établissements configurés</div><div class="kv">${cfg.length}<span style="font-size:13px;color:var(--tx2)"> / 50</span></div></div>
       <div class="kc"><div class="kl">Accès complets</div><div class="kv" style="color:var(--green)">${cfg.filter(p=>p.fb_token&&p.ad_account_id).length}</div><div class="ks">Meta + compte pub</div></div>
       <div class="kc"><div class="kl">Accès partiels</div><div class="kv" style="color:var(--amber)">${cfg.filter(p=>p.fb_token&&!p.ad_account_id).length}</div><div class="ks">Page seulement</div></div>
       <div class="kc"><div class="kl">Non configurés</div><div class="kv" style="color:var(--tx3)">${50-cfg.length}</div></div>
     </div>
-    ${cfg.length===0?`<div class="card"><div class="info-box"><strong>Bienvenue !</strong> Commencez par ajouter vos établissements via <strong>"Gérer les établissements"</strong>.</div></div>`:''}
-    <div class="card">
-      <div class="ct">État des accès</div>
-      ${cfg.length===0?'<p class="empty">Aucun établissement configuré.</p>':`
-      <div class="tbl-wrap"><table class="t">
-        <thead><tr><th>Établissement</th><th>Ville</th><th>Page Facebook</th><th>Compte pub</th><th>GMB</th></tr></thead>
-        <tbody>${cfg.map(p=>`<tr style="cursor:pointer" onclick="navPDV('${p.id}')">
-          <td class="tal"><strong>${p.nom}</strong></td>
-          <td>${p.ville||'—'}</td>
-          <td>${p.fb_page_id&&p.fb_token?'<span class="badge bg">OK</span>':'<span class="badge br">Manquant</span>'}</td>
-          <td>${p.ad_account_id?'<span class="badge bg">OK</span>':'<span class="badge ba">Non configuré</span>'}</td>
-          <td>${p.gmb_place_id?'<span class="badge bg">OK</span>':'<span class="badge ba">Non configuré</span>'}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>`}
+
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Règles de couleurs</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem">
+        <!-- Durée -->
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--tx)">⏱ Durée de boost</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--green-bg);border-radius:var(--r)"><span style="color:var(--green-tx)">✓ Durée atteinte ou dépassée</span><span class="badge bg">Vert</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--red-bg);border-radius:var(--r)"><span style="color:var(--red-tx)">✗ Durée insuffisante</span><span class="badge br">Rouge</span></div>
+            <div style="font-size:11px;color:var(--tx3);margin-top:4px">Seuils : Apéro Quiz 4j · Apéro Concert 5j · Club/Open Mix 5j · Fléchettes/SBK/Crush/Karaoke 4j · Sport/Divers 2j · Beer Pong 7j · Soirée Événement 14j · Soirée autre 5j</div>
+          </div>
+        </div>
+        <!-- Budget -->
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--tx)">💰 Budget total</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--green-bg);border-radius:var(--r)"><span style="color:var(--green-tx)">≥ 90% du budget cible</span><span class="badge bg">Vert</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--amber-bg);border-radius:var(--r)"><span style="color:var(--amber-tx)">Entre 70% et 90%</span><span class="badge ba">Orange</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--red-bg);border-radius:var(--r)"><span style="color:var(--red-tx)">< 70% du budget cible</span><span class="badge br">Rouge</span></div>
+            <div style="font-size:11px;color:var(--tx3);margin-top:4px">Cibles : Apéro Quiz 40€ · Apéro/Club/Open Mix/Karaoke 50€ · Fléchettes/SBK/Crush/Comedy/Flash Tattoo 30€ · Sport/Divers 20€ · Beer Pong 70€ · Soirée Événement 100€ · Soirée autre 50€</div>
+          </div>
+        </div>
+        <!-- Objectif -->
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--tx)">🎯 Objectif</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--green-bg);border-radius:var(--r)"><span style="color:var(--green-tx)">Interaction · Trafic · Événement</span><span class="badge bg">Vert</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--red-bg);border-radius:var(--r)"><span style="color:var(--red-tx)">Tout autre objectif</span><span class="badge br">Rouge</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--bd)">
+        <div style="font-size:11px;font-weight:700;color:var(--tx2);margin-bottom:6px">Scores de synthèse</div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:12px">
+          <span><span class="badge bg">Bon</span> ≥ 80% de vert</span>
+          <span><span class="badge ba">Moyen</span> entre 50% et 80%</span>
+          <span><span class="badge br">Mauvais</span> < 50%</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:0">
+      ${sectorCard('Armand', groupes['Armand'])}
+      ${sectorCard('Marvyn', groupes['Marvyn'])}
+      ${sectorCard('Mahfoud', groupes['Mahfoud'])}
+      ${sectorCard('Non assigné', groupes['Non assigné'])}
     </div>`
 }
 
