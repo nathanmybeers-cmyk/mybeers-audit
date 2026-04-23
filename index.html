@@ -383,7 +383,7 @@ function buildSidebar(activePdv) {
 
   el.innerHTML = Object.entries(groupes).map(([anim, pdvs]) => {
     if(!pdvs.length) return ''
-    return `<div class="ns" style="margin-top:4px">${anim}</div>${pdvs.map(pdvItem).join('')}`
+    return `<div class="ns" style="margin-top:4px;color:var(--tx)">${anim}</div>${pdvs.map(pdvItem).join('')}`
   }).join('')
 }
 
