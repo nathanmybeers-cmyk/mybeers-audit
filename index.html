@@ -640,14 +640,16 @@ async function renderDash(pdvId, force, period) {
     </div>
     <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
 
-  // Toujours charger toutes les données pour construire le select complet
-  const [ads, adsAll, page, gmb, organic] = await Promise.all([
+  // Charger adsAll uniquement si période max/personnalisée, sinon depuis le cache uniquement
+  const needsAll = currentPeriod !== '30d'
+  const cachedAll = DB.getCache(pdvId, 'ads_max')
+  const [ads, page, gmb, organic] = await Promise.all([
     loadAds(pdv, force, currentPeriod),
-    loadAds(pdv, false, 'max'),
     loadPage(pdv, force),
     loadGMB(pdv, force),
     loadOrganic(pdv, force)
   ])
+  const adsAll = needsAll ? await loadAds(pdv, false, 'max') : (cachedAll || ads)
 
   const cEl = document.getElementById('cache-ts')
   if(cEl){ try{ const c=DB.getCache(pdvId,'ads_'+currentPeriod); if(c) cEl.textContent=`Mis à jour le ${new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`))||'{}').ts||0 > 0 ? new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`)).ts).toLocaleDateString('fr-FR') : ''}` }catch(e){} }
