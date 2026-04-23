@@ -370,11 +370,20 @@ function buildSidebar(activePdv) {
   const cfg = sheetConfig || DB.cfg
   const el = document.getElementById('pdv-list')
   if(!cfg.length){ el.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Aucun établissement</div>'; return }
-  el.innerHTML = cfg.map(p => {
+
+  const groupes = {'Armand':[], 'Marvyn':[], 'Mahfoud':[], 'Non assigné':[]}
+  cfg.forEach(p => { groupes[getAnimateur(p)].push(p) })
+
+  const pdvItem = p => {
     const ok = p.fb_token && p.ad_account_id
     return `<div class="pdv-item${activePdv===p.id?' active':''}" data-pdv="${p.id}" onclick="navPDV('${p.id}')">
-      <span class="sdot" style="background:${ok?'var(--green)':'var(--amber)'}"></span>${p.nom}
+      <span class="sdot" style="background:${ok?'var(--green)':'var(--amber)'}"></span>${p.nom.replace('My Beers ','')}
     </div>`
+  }
+
+  el.innerHTML = Object.entries(groupes).map(([anim, pdvs]) => {
+    if(!pdvs.length) return ''
+    return `<div class="ns" style="margin-top:4px">${anim}</div>${pdvs.map(pdvItem).join('')}`
   }).join('')
 }
 
@@ -395,7 +404,7 @@ document.querySelectorAll('.ni[data-v]').forEach(el=>el.addEventListener('click'
 
 // ── ACCUEIL ────────────────────────────────────────────────────────────────
 const SECTEURS = {
-  'Armand':  ['brive','carcassonne','chambray','laval','montargis','montauban','niort','orléans fleury','orléans - fleury','orleans fleury','orléans sud','orleans sud','poitiers','vitré','vitre'],
+  'Armand':  ['brive','carcassonne','chambray','laval','montargis','montauban','niort','orléans fleury','orléans - fleury','orleans fleury','orléans-fleury','orleans-fleury','orléans sud','orleans sud','poitiers','vitré','vitre'],
   'Marvyn':  ['kingersheim','macon','mâcon','rouen','vendenheim','vesoul'],
   'Mahfoud': ['aubenas','etoile','étoile','meyzieu','roquebrune','toulon','tournon','vidauban','voiron']
 }
