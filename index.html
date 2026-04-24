@@ -296,6 +296,7 @@ async function exportPDF(pdvId) {
   const DUREE_MIN_local = { 'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5 }
   const BUDGET_CIBLE_local = { 'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30 }
   const getBT = r => { const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)):null; if(r.lifetime_budget)return r.lifetime_budget; if(r.daily_budget&&d)return r.daily_budget*d; return null }
+  const fmtPDF = n => (isNaN(n)||n===null||n===undefined) ? '—' : Number(n).toLocaleString('fr-FR').replace(/[  ]/g,' ')
 
   // Durée
   const dRows = rows.filter(r=>r.date_start&&r.date_stop&&(DUREE_MIN_local[r._type]!==undefined||r._type==='Soirée'))
@@ -367,8 +368,32 @@ async function exportPDF(pdvId) {
   doc.text(periodLabel, W-14, 12, { align:'right' })
 
   // Données tableau
+  const rowMeta = rows.map(r => {
+    const ol = objMap[r.objective]||r.objective||'—'
+    const duree = r.date_start&&r.date_stop ? Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)) : null
+    let dureeColor = null
+    if(duree !== null) {
+      let min = DUREE_MIN_local[r._type]
+      if(r._type==='Soirée') min = ol==='Événement' ? 14 : 5
+      if(min !== undefined) dureeColor = duree >= min ? 'green' : 'red'
+    }
+    const bt = getBT(r)
+    let budgetColor = null
+    if(bt) {
+      if(r._type==='Soirée') {
+        const c = ol==='Événement' ? 100 : 50; const ratio = bt/c
+        budgetColor = ratio>=0.9 ? 'green' : ratio>=0.7 ? 'amber' : 'red'
+      } else {
+        const badge = bBadgeLocal[r.campaign_id]
+        if(badge) budgetColor = badge.cls==='ok' ? 'green' : badge.cls==='warn' ? 'amber' : 'red'
+      }
+    }
+    const objColor = ol!=='—' ? (['Interaction','Trafic','Événement'].includes(ol) ? 'green' : 'red') : null
+    return { dureeColor, budgetColor, objColor }
+  })
+
   const tableData = rows.map(r => {
-    const name = (r.campaign_name||'—').replace(/Publication\s*:\s*«\s*/,'').replace(/»\s*$/,'').replace(/Publication Instagram\s*:\s*/,'').replace(/Évènement\s*:\s*/,'').trim().substring(0,45)
+    const name = (r.campaign_name||'—').replace(/^(Boost de publication|Publication Instagram|Publication|[ÉE]v[eè]nements?|[ÉE]v[eè]nement)\s*[:：]\s*/i,'').replace(/^«\s*/,'').replace(/\s*»\s*$/,'').trim().substring(0,45)
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const plat = (objMap[r.objective]||r.objective||'—')==='Événement' ? 'Event FB' : isIG ? 'Instagram' : 'Facebook'
     const today=new Date();today.setHours(0,0,0,0)
@@ -378,8 +403,8 @@ async function exportPDF(pdvId) {
     const bt = getBT(r); const btStr = bt ? bt.toFixed(2)+'€' : '—'
     const ol = objMap[r.objective]||r.objective||'—'
     const resultMap={'OUTCOME_ENGAGEMENT':getAction(r.actions,'post_engagement'),'LINK_CLICKS':getAction(r.actions,'link_click'),'OUTCOME_TRAFFIC':getAction(r.actions,'link_click'),'MESSAGES':getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),'REACH':parseInt(r.reach)||0,'EVENT_RESPONSES':getAction(r.actions,'rsvp'),'OUTCOME_AWARENESS':parseInt(r.reach)||0}
-    const result = resultMap[r.objective]!==undefined?fmt(resultMap[r.objective]):'—'
-    return [statut, plat, name, r._type||'—', fmtD(r.date_start), fmtD(r.date_stop), duree.toString(), fmt(r.reach), fmt(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmt(getAction(r.actions,'post')), fmt(getAction(r.actions,'post_reaction'))]
+    const result = resultMap[r.objective]!==undefined?fmtPDF(resultMap[r.objective]):'—'
+    return [statut, plat, name, r._type||'—', fmtD(r.date_start), fmtD(r.date_stop), duree.toString(), fmtPDF(r.reach), fmtPDF(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmtPDF(getAction(r.actions,'post')), fmtPDF(getAction(r.actions,'post_reaction'))]
   })
 
   doc.autoTable({
@@ -396,6 +421,21 @@ async function exportPDF(pdvId) {
       9: { cellWidth: 16, halign:'right' }, 10: { cellWidth: 16, halign:'right' },
       11: { cellWidth: 20 }, 12: { cellWidth: 16, halign:'right' },
       13: { cellWidth: 14, halign:'right' }, 14: { cellWidth: 16, halign:'right' }
+    },
+    willDrawCell: (data) => {
+      if(data.section !== 'body') return
+      const m = rowMeta[data.row.index]
+      if(!m) return
+      const COLOR = {
+        green:  { fill: [220, 245, 230], text: [30, 130, 70] },
+        amber:  { fill: [255, 246, 215], text: [160, 105, 0] },
+        red:    { fill: [255, 228, 226], text: [180, 45, 45] }
+      }
+      let c = null
+      if(data.column.index === 6 && m.dureeColor)  c = COLOR[m.dureeColor]
+      if(data.column.index === 10 && m.budgetColor) c = COLOR[m.budgetColor]
+      if(data.column.index === 11 && m.objColor)    c = COLOR[m.objColor]
+      if(c) { doc.setFillColor(...c.fill); doc.setTextColor(...c.text) }
     },
     didDrawPage: (data) => {
       const pn = doc.getNumberOfPages()
