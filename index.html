@@ -271,11 +271,11 @@ async function exportPDF(pdvId) {
 
   const kpis = [
     { label: 'Budget dépensé', value: totalSpend.toFixed(2)+'€' },
-    { label: 'Couverture', value: fmt(totalReach) },
-    { label: 'Impressions', value: fmt(totalImpr) },
-    { label: 'Engagements', value: fmt(totalEng) },
-    { label: 'Réactions', value: fmt(totalReact) },
-    { label: 'Partages', value: fmt(totalShare) },
+    { label: 'Couverture', value: fmtPDF(totalReach) },
+    { label: 'Impressions', value: fmtPDF(totalImpr) },
+    { label: 'Engagements', value: fmtPDF(totalEng) },
+    { label: 'Réactions', value: fmtPDF(totalReact) },
+    { label: 'Partages', value: fmtPDF(totalShare) },
     { label: 'CPM', value: cpm.toFixed(2)+'€' },
     { label: 'CPR', value: cpr.toFixed(2)+'€' },
   ]
@@ -417,10 +417,11 @@ async function exportPDF(pdvId) {
     columnStyles: {
       0: { cellWidth: 14 }, 1: { cellWidth: 18 }, 2: { cellWidth: 48 }, 3: { cellWidth: 20 },
       4: { cellWidth: 16 }, 5: { cellWidth: 16 }, 6: { cellWidth: 12, halign:'center' },
-      7: { cellWidth: 18, halign:'right' }, 8: { cellWidth: 16, halign:'right' },
-      9: { cellWidth: 16, halign:'right' }, 10: { cellWidth: 16, halign:'right' },
-      11: { cellWidth: 20 }, 12: { cellWidth: 16, halign:'right' },
-      13: { cellWidth: 14, halign:'right' }, 14: { cellWidth: 16, halign:'right' }
+      7: { cellWidth: 18, halign:'center' }, 8: { cellWidth: 16, halign:'center' },
+      9: { cellWidth: 16, halign:'center' }, 10: { cellWidth: 16, halign:'center' },
+      11: { cellWidth: 20, halign:'center' }, 12: { cellWidth: 16, halign:'center' },
+      13: { cellWidth: 14, halign:'center' }, 14: { cellWidth: 16, halign:'center' },
+      3: { cellWidth: 20, halign:'center' }
     },
     willDrawCell: (data) => {
       if(data.section !== 'body') return
