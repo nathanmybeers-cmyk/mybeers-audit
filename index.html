@@ -657,6 +657,7 @@ const SECTEURS = {
 }
 
 function getAnimateur(pdv) {
+  if(pdv.secteur && pdv.secteur !== 'Non assigné') return pdv.secteur
   const nom = (pdv.nom||'').toLowerCase().replace('my beers ','').trim()
   const ville = (pdv.ville||'').toLowerCase().trim()
   for(const [anim, villes] of Object.entries(SECTEURS)) {
@@ -789,6 +790,7 @@ function showForm(id) {
         <div><label>Nom *</label><input id="cf-nom" value="${p?.nom||''}" placeholder="Ex : My Beers Poitiers"></div>
         <div><label>Ville</label><input id="cf-ville" value="${p?.ville||''}" placeholder="Ex : Poitiers"></div>
       </div>
+      <div style="margin-bottom:10px"><label>Secteur</label><select id="cf-secteur" style="width:100%;padding:6px 8px;border-radius:var(--r);border:0.5px solid var(--bd2);background:var(--bg2);color:var(--tx);font-size:12px"><option value="Non assigné" ${(!p?.secteur||p?.secteur==='Non assigné')?'selected':''}>Non assigné</option><option value="Armand" ${p?.secteur==='Armand'?'selected':''}>Armand</option><option value="Marvyn" ${p?.secteur==='Marvyn'?'selected':''}>Marvyn</option><option value="Mahfoud" ${p?.secteur==='Mahfoud'?'selected':''}>Mahfoud</option></select></div>
       <div class="sep"></div>
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">Facebook / Meta</div>
       <div class="fg2" style="gap:10px;margin-bottom:10px">
@@ -820,6 +822,7 @@ async function savePDV(existingId) {
   const obj = {
     id: existingId || 'pdv_'+Date.now(),
     nom, ville: document.getElementById('cf-ville').value.trim(),
+    secteur: document.getElementById('cf-secteur').value,
     fb_page_id: document.getElementById('cf-fbid').value.trim(),
     ad_account_id: document.getElementById('cf-adid').value.trim(),
     fb_token: document.getElementById('cf-token').value.trim(),
