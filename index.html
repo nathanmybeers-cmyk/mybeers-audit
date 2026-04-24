@@ -221,6 +221,7 @@ async function exportPDF(pdvId) {
   const DARK = [26, 26, 26]
   const GREY = [102, 102, 102]
   const LGREY = [240, 238, 234]
+  const fmtPDF = n => (isNaN(n)||n===null||n===undefined) ? '—' : Number(n).toLocaleString('fr-FR').replace(/[  ]/g,' ')
 
   // Période label
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
@@ -296,7 +297,6 @@ async function exportPDF(pdvId) {
   const DUREE_MIN_local = { 'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5 }
   const BUDGET_CIBLE_local = { 'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30 }
   const getBT = r => { const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)):null; if(r.lifetime_budget)return r.lifetime_budget; if(r.daily_budget&&d)return r.daily_budget*d; return null }
-  const fmtPDF = n => (isNaN(n)||n===null||n===undefined) ? '—' : Number(n).toLocaleString('fr-FR').replace(/[  ]/g,' ')
 
   // Durée
   const dRows = rows.filter(r=>r.date_start&&r.date_stop&&(DUREE_MIN_local[r._type]!==undefined||r._type==='Soirée'))
