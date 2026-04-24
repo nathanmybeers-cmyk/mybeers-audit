@@ -221,7 +221,8 @@ async function exportPDF(pdvId) {
   const DARK = [26, 26, 26]
   const GREY = [102, 102, 102]
   const LGREY = [240, 238, 234]
-  const fmtPDF = n => (isNaN(n)||n===null||n===undefined) ? '—' : Number(n).toLocaleString('fr-FR').replace(/[  ]/g,' ')
+  const fmtPDF = n => (isNaN(n)||n===null||n===undefined) ? '-' : Number(n).toLocaleString('fr-FR').replace(/[  ]/g,' ')
+  const fmtDPDF = s => s ? new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '-'
 
   // Période label
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
@@ -393,30 +394,48 @@ async function exportPDF(pdvId) {
   })
 
   const cleanNamePDF = s => {
-    if(!s || s==='—') return '—'
-    return s
-      .replace(/^(Boost de publication|Publication Instagram|Publication|[ÉE]v[eè]nements?|[ÉE]v[eè]nement)\s*[:：]\s*/i,'')
-      .replace(/^[«"]\s*/,'').replace(/\s*[»"]\s*$/,'')
-      .replace(/[""]/g,'"').replace(/['']/g,"'")
-      .replace(/[–—]/g,'-').replace(/…/g,'...')
-      .replace(/[^\x00-\xFF]/g,'')
-      .replace(/\s+/g,' ').trim().substring(0,45)
+    if(!s) return '-'
+    const mathToAscii = str => {
+      const upB=[0x1D400,0x1D434,0x1D468,0x1D49C,0x1D4D0,0x1D504,0x1D538,0x1D56C,0x1D5A0,0x1D5D4,0x1D608,0x1D63C,0x1D670]
+      const loB=[0x1D41A,0x1D44E,0x1D482,0x1D4B6,0x1D4EA,0x1D51E,0x1D552,0x1D586,0x1D5BA,0x1D5EE,0x1D622,0x1D656,0x1D68A]
+      let r=''
+      for(const ch of str){
+        const cp=ch.codePointAt(0);let ok=false
+        for(let i=0;i<upB.length;i++){
+          if(cp>=upB[i]&&cp<upB[i]+26){r+=String.fromCharCode(65+cp-upB[i]);ok=true;break}
+          if(cp>=loB[i]&&cp<loB[i]+26){r+=String.fromCharCode(97+cp-loB[i]);ok=true;break}
+        }
+        if(!ok){
+          if(cp>=0xFF01&&cp<=0xFF5E)r+=String.fromCharCode(cp-0xFF01+0x21)
+          else if(cp>=0x1D7CE&&cp<=0x1D7FF)r+=String.fromCharCode(48+(cp-0x1D7CE)%10)
+          else if(cp<=0xFF)r+=ch
+        }
+      }
+      return r
+    }
+    let name=s
+      .replace(/^(Boost de publication|Publication Instagram|Publication|[\u00c9E]v[\u00e8e]nements?|[\u00c9E]v[\u00e8e]nement)\s*[::\uff1a]\s*/i,'')
+      .replace(/^[\u00ab\u201c"]\s*/,'').replace(/\s*[\u00bb\u201d"]\s*$/,'')
+    name=mathToAscii(name)
+      .replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...')
+      .replace(/[^\x20-\xff]/g,'').replace(/\s+/g,' ').trim()
+    return name.substring(0,45)||'-'
   }
 
   const tableData = rows.map(r => {
-    const name = cleanNamePDF(r.campaign_name||'—')
+    const name = cleanNamePDF(r.campaign_name||'')
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const plat = (objMap[r.objective]||r.objective||'—')==='Événement' ? 'Event FB' : isIG ? 'Instagram' : 'Facebook'
     const today=new Date();today.setHours(0,0,0,0)
     const stopDate=r.date_stop?new Date(r.date_stop):null
     const statut = r.status==='ACTIVE'&&stopDate&&stopDate>=today ? 'En cours' : 'Terminé'
     const duree = r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)):null
-    const dureeStr = duree !== null ? 'J-'+duree : '—'
-    const bt = getBT(r); const btStr = bt ? bt.toFixed(2)+'€' : '—'
+    const dureeStr = duree !== null ? 'J-'+duree : '-'
+    const bt = getBT(r); const btStr = bt ? bt.toFixed(2)+'€' : '-'
     const ol = objMap[r.objective]||r.objective||'—'
     const resultMap={'OUTCOME_ENGAGEMENT':getAction(r.actions,'post_engagement'),'LINK_CLICKS':getAction(r.actions,'link_click'),'OUTCOME_TRAFFIC':getAction(r.actions,'link_click'),'MESSAGES':getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),'REACH':parseInt(r.reach)||0,'EVENT_RESPONSES':getAction(r.actions,'rsvp'),'OUTCOME_AWARENESS':parseInt(r.reach)||0}
     const result = resultMap[r.objective]!==undefined?fmtPDF(resultMap[r.objective]):'—'
-    return [statut, plat, name, r._type||'—', fmtD(r.date_start), fmtD(r.date_stop), dureeStr, fmtPDF(r.reach), fmtPDF(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmtPDF(getAction(r.actions,'post')), fmtPDF(getAction(r.actions,'post_reaction'))]
+    return [statut, plat, name, r._type||'-', fmtDPDF(r.date_start), fmtDPDF(r.date_stop), dureeStr, fmtPDF(r.reach), fmtPDF(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmtPDF(getAction(r.actions,'post')), fmtPDF(getAction(r.actions,'post_reaction'))]
   })
 
   doc.autoTable({
@@ -427,13 +446,13 @@ async function exportPDF(pdvId) {
     headStyles: { fillColor: TEAL, textColor: 255, fontStyle: 'bold', fontSize: 7, halign: 'center' },
     alternateRowStyles: { fillColor: [248, 247, 245] },
     columnStyles: {
-      0: { cellWidth: 14 }, 1: { cellWidth: 18 }, 2: { cellWidth: 48 }, 3: { cellWidth: 20 },
-      4: { cellWidth: 16 }, 5: { cellWidth: 16 }, 6: { cellWidth: 12, halign:'center' },
-      7: { cellWidth: 18, halign:'center' }, 8: { cellWidth: 16, halign:'center' },
-      9: { cellWidth: 16, halign:'center' }, 10: { cellWidth: 16, halign:'center' },
-      11: { cellWidth: 20, halign:'center' }, 12: { cellWidth: 16, halign:'center' },
-      13: { cellWidth: 14, halign:'center' }, 14: { cellWidth: 16, halign:'center' },
-      3: { cellWidth: 20, halign:'center' }
+      0: { cellWidth: 14 }, 1: { cellWidth: 18 }, 2: { cellWidth: 48 },
+      3: { cellWidth: 20, halign:'center' }, 4: { cellWidth: 16 }, 5: { cellWidth: 16 },
+      6: { cellWidth: 12, halign:'center' }, 7: { cellWidth: 18, halign:'center' },
+      8: { cellWidth: 14, halign:'center' }, 9: { cellWidth: 14, halign:'center' },
+      10: { cellWidth: 14, halign:'center' }, 11: { cellWidth: 20, halign:'center' },
+      12: { cellWidth: 16, halign:'center' }, 13: { cellWidth: 14, halign:'center' },
+      14: { cellWidth: 15, halign:'center' }
     },
     willDrawCell: (data) => {
       if(data.section !== 'body') return
