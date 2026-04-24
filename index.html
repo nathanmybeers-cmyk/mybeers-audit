@@ -322,6 +322,7 @@ async function exportPDF(pdvId) {
   const oRatio = oRows.length > 0 ? oVert/oRows.length : null
 
   const scoreColor = ratio => ratio === null ? [180,180,180] : ratio >= 0.8 ? [44,181,181] : ratio >= 0.5 ? [239,159,39] : [226,75,74]
+  const scoreBg    = ratio => ratio === null ? [240,240,240] : ratio >= 0.8 ? [210,245,240] : ratio >= 0.5 ? [255,247,215] : [255,220,220]
   const scoreLabel = (ratio, type) => {
     if(ratio === null) return 'N/A'
     if(type==='duree') return ratio>=0.8?'Bonne anticipation':ratio>=0.5?'Anticipation moyenne':'Mauvaise anticipation'
@@ -340,8 +341,7 @@ async function exportPDF(pdvId) {
   scores.forEach((s, i) => {
     const x = 14 + i * scoreW, y = scoreY
     const col = scoreColor(s.ratio)
-    doc.setFillColor(col[0], col[1], col[2], 0.1)
-    doc.setFillColor(Math.min(255,col[0]+180), Math.min(255,col[1]+180), Math.min(255,col[2]+180))
+    doc.setFillColor(...scoreBg(s.ratio))
     doc.roundedRect(x, y, scoreW - 4, 26, 2, 2, 'F')
     doc.setTextColor(...GREY); doc.setFontSize(8); doc.setFont('helvetica','normal')
     doc.text(s.label, x+6, y+7)
@@ -392,19 +392,31 @@ async function exportPDF(pdvId) {
     return { dureeColor, budgetColor, objColor }
   })
 
+  const cleanNamePDF = s => {
+    if(!s || s==='—') return '—'
+    return s
+      .replace(/^(Boost de publication|Publication Instagram|Publication|[ÉE]v[eè]nements?|[ÉE]v[eè]nement)\s*[:：]\s*/i,'')
+      .replace(/^[«"]\s*/,'').replace(/\s*[»"]\s*$/,'')
+      .replace(/[""]/g,'"').replace(/['']/g,"'")
+      .replace(/[–—]/g,'-').replace(/…/g,'...')
+      .replace(/[^\x00-\xFF]/g,'')
+      .replace(/\s+/g,' ').trim().substring(0,45)
+  }
+
   const tableData = rows.map(r => {
-    const name = (r.campaign_name||'—').replace(/^(Boost de publication|Publication Instagram|Publication|[ÉE]v[eè]nements?|[ÉE]v[eè]nement)\s*[:：]\s*/i,'').replace(/^«\s*/,'').replace(/\s*»\s*$/,'').trim().substring(0,45)
+    const name = cleanNamePDF(r.campaign_name||'—')
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const plat = (objMap[r.objective]||r.objective||'—')==='Événement' ? 'Event FB' : isIG ? 'Instagram' : 'Facebook'
     const today=new Date();today.setHours(0,0,0,0)
     const stopDate=r.date_stop?new Date(r.date_stop):null
     const statut = r.status==='ACTIVE'&&stopDate&&stopDate>=today ? 'En cours' : 'Terminé'
-    const duree = r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)):'—'
+    const duree = r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/(86400000)):null
+    const dureeStr = duree !== null ? 'J-'+duree : '—'
     const bt = getBT(r); const btStr = bt ? bt.toFixed(2)+'€' : '—'
     const ol = objMap[r.objective]||r.objective||'—'
     const resultMap={'OUTCOME_ENGAGEMENT':getAction(r.actions,'post_engagement'),'LINK_CLICKS':getAction(r.actions,'link_click'),'OUTCOME_TRAFFIC':getAction(r.actions,'link_click'),'MESSAGES':getAction(r.actions,'onsite_conversion.messaging_conversation_started_7d'),'REACH':parseInt(r.reach)||0,'EVENT_RESPONSES':getAction(r.actions,'rsvp'),'OUTCOME_AWARENESS':parseInt(r.reach)||0}
     const result = resultMap[r.objective]!==undefined?fmtPDF(resultMap[r.objective]):'—'
-    return [statut, plat, name, r._type||'—', fmtD(r.date_start), fmtD(r.date_stop), duree.toString(), fmtPDF(r.reach), fmtPDF(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmtPDF(getAction(r.actions,'post')), fmtPDF(getAction(r.actions,'post_reaction'))]
+    return [statut, plat, name, r._type||'—', fmtD(r.date_start), fmtD(r.date_stop), dureeStr, fmtPDF(r.reach), fmtPDF(getAction(r.actions,'post_interaction_net')), (parseFloat(r.spend)||0).toFixed(2)+'€', btStr, ol, result, fmtPDF(getAction(r.actions,'post')), fmtPDF(getAction(r.actions,'post_reaction'))]
   })
 
   doc.autoTable({
@@ -412,7 +424,7 @@ async function exportPDF(pdvId) {
     head: [['Statut','Plateforme','Publication','Type','Début','Fin','Durée','Couverture','Interact.','Dépensé','Budget','Objectif','Résultat','Partages','Réactions']],
     body: tableData,
     styles: { fontSize: 7, cellPadding: 2, overflow: 'ellipsize' },
-    headStyles: { fillColor: TEAL, textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    headStyles: { fillColor: TEAL, textColor: 255, fontStyle: 'bold', fontSize: 7, halign: 'center' },
     alternateRowStyles: { fillColor: [248, 247, 245] },
     columnStyles: {
       0: { cellWidth: 14 }, 1: { cellWidth: 18 }, 2: { cellWidth: 48 }, 3: { cellWidth: 20 },
