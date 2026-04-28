@@ -1124,6 +1124,65 @@ function showTab(el, id) {
   ;['t-ads','t-organic','t-page','t-gmb'].forEach(i=>{ const e=document.getElementById(i); if(e) e.style.display=i===id?'block':'none' })
 }
 
+// ── AUDIENCE ROW ───────────────────────────────────────────────────────────
+async function toggleAudienceRow(trEl, campaignId, pdvId) {
+  const rowId = `aud-${campaignId}`
+  const existing = document.getElementById(rowId)
+  if (existing) { existing.remove(); trEl.style.outline = ''; return }
+  trEl.style.outline = '2px solid var(--bd2)'
+  const cols = trEl.cells.length
+  const detailTr = document.createElement('tr')
+  detailTr.id = rowId
+  detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3)"><span class="spin"></span> Chargement audience…</td>`
+  trEl.insertAdjacentElement('afterend', detailTr)
+
+  const pdv = (sheetConfig || DB.cfg).find(x => x.id === pdvId)
+  if (!pdv) return
+  try {
+    const d = await fetchMeta(`${campaignId}/adsets?fields=name,targeting`, pdv.fb_token)
+    const adsets = d.data || []
+    if (!adsets.length) {
+      detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3);font-size:12px;color:var(--tx3)">Aucun ensemble de publicités trouvé.</td>`
+      return
+    }
+    const fmtGeo = t => {
+      const gl = t.geo_locations || {}
+      if (gl.cities?.length) return gl.cities.map(c => `${c.name}${c.radius ? ` +${c.radius}km` : ''}`).join(', ')
+      if (gl.regions?.length) return gl.regions.map(r => r.name).join(', ')
+      if (gl.countries?.length) return gl.countries.join(', ')
+      return '—'
+    }
+    const fmtInterests = t => {
+      const items = []
+      ;(t.flexible_spec||[]).forEach(spec => {
+        Object.values(spec).forEach(arr => { if(Array.isArray(arr)) arr.forEach(x => { if(x.name) items.push(x.name) }) })
+      })
+      return items.length ? items.slice(0, 6).join(', ') : null
+    }
+    const html = adsets.map(as => {
+      const t = as.targeting || {}
+      const age = (t.age_min||t.age_max) ? `${t.age_min||'?'}–${t.age_max||'?'} ans` : '—'
+      const gender = !t.genders?.length ? 'Tous' : t.genders.map(g => g===1?'Hommes':'Femmes').join(' + ')
+      const zone = fmtGeo(t)
+      const interests = fmtInterests(t)
+      const customAud = (t.custom_audiences||[]).map(a => a.name).filter(Boolean)
+      return `<div>
+        ${adsets.length>1 ? `<div style="font-size:11px;font-weight:600;color:var(--tx2);margin-bottom:5px">${as.name}</div>` : ''}
+        <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:12px">
+          <div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">ÂGE</div><strong>${age}</strong></div>
+          <div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">GENRE</div><strong>${gender}</strong></div>
+          <div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">ZONE</div><strong>${zone}</strong></div>
+          ${interests ? `<div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">INTÉRÊTS</div><strong>${interests}</strong></div>` : ''}
+          ${customAud.length ? `<div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">AUDIENCES</div><strong>${customAud.join(', ')}</strong></div>` : ''}
+        </div>
+      </div>`
+    }).join('<hr style="border:none;border-top:0.5px solid var(--bd);margin:10px 0">')
+    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem 1rem;background:var(--bg3)">${html}</td>`
+  } catch(e) {
+    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3);font-size:12px;color:var(--red)">Erreur : ${e.message}</td>`
+  }
+}
+
 // ── FILTERING ──────────────────────────────────────────────────────────────
 function getFiltered(data30d, dataAll) {
   if(!dataAll || !Array.isArray(dataAll)) return []
@@ -1307,7 +1366,7 @@ function renderAdsTab(data, pdv, allData) {
     } else {
       platBadge = `<span class="badge bb">Facebook</span>`
     }
-    return `<tr style="${rowBg}">
+    return `<tr style="cursor:pointer;${rowBg}" onclick="toggleAudienceRow(this,'${r.campaign_id}','${pdv.id}')">
       <td>${statutBadge}</td>
       <td>${platBadge}</td>
       <td class="tal" title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
