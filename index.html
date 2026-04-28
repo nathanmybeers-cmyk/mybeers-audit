@@ -894,7 +894,7 @@ function showForm(id) {
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">Facebook / Meta</div>
       <div class="fg2" style="gap:10px;margin-bottom:10px">
         <div><label>Page ID Facebook</label><input id="cf-fbid" value="${p?.fb_page_id||''}" placeholder="Ex : 609686032238115"></div>
-        <div><label>ID compte publicitaire</label><input id="cf-adid" value="${p?.ad_account_id||''}" placeholder="Ex : act_346792040096064"></div>
+        <div><label>ID compte(s) publicitaire(s)</label><input id="cf-adid" value="${p?.ad_account_id||''}" placeholder="Ex : act_346792040096064 — plusieurs : act_111,act_222"></div>
       </div>
       <div style="margin-bottom:10px"><label>Token d'accès Meta (longue durée)</label><input id="cf-token" class="token-field" value="${p?.fb_token||''}" placeholder="EAAZCDhr..."></div>
       <div style="margin-bottom:10px"><label>Token de page Facebook <span style="font-weight:400;color:var(--tx2)">(pour les données organiques)</span></label><input id="cf-page-token" class="token-field" value="${p?.page_token||''}" placeholder="EAFyHu7..."></div>
@@ -954,12 +954,18 @@ async function loadAds(pdv, force, period) {
   const cacheKey = 'ads_' + (period||'30d')
   if(!force){ const c=DB.getCache(pdv.id, cacheKey); if(c) return c }
   try {
-    let campaigns=[], curl=`${pdv.ad_account_id}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&limit=100`
-    while(curl) {
-      const d = await fetchMeta(curl, pdv.fb_token)
-      campaigns = campaigns.concat(d.data||[])
-      curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
-      if(campaigns.length > 1000) break
+    const accountIds = pdv.ad_account_id.split(',').map(s => s.trim()).filter(Boolean)
+
+    // Récupérer les campagnes de tous les comptes publicitaires
+    let campaigns = []
+    for (const accountId of accountIds) {
+      let curl = `${accountId}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&limit=100`
+      while(curl) {
+        const d = await fetchMeta(curl, pdv.fb_token)
+        campaigns = campaigns.concat(d.data||[])
+        curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+        if(campaigns.length > 1000) break
+      }
     }
     // Filtrer par page_id si configuré et si promoted_object disponible
     const filterPageId = pdv.filter_page_id || pdv.fb_page_id
@@ -974,15 +980,18 @@ async function loadAds(pdv, force, period) {
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
 
+    // Récupérer les insights de tous les comptes publicitaires
     const preset = period==='max' ? 'maximum' : 'last_30d'
-    let insights=[], iurl=`${pdv.ad_account_id}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
-    while(iurl) {
-      const d = await fetchMeta(iurl, pdv.fb_token)
-      insights = insights.concat(d.data||[])
-      iurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
-      if(insights.length > 500) break
+    let insights = []
+    for (const accountId of accountIds) {
+      let iurl = `${accountId}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
+      while(iurl) {
+        const d = await fetchMeta(iurl, pdv.fb_token)
+        insights = insights.concat(d.data||[])
+        iurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+        if(insights.length > 500) break
+      }
     }
-
 
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
@@ -999,10 +1008,14 @@ async function loadAds(pdv, force, period) {
       }
     })
 
-    // Récupérer les dépenses d'hier pour détecter les campagnes actives non diffusées
+    // Récupérer les dépenses d'hier pour tous les comptes (détection campagnes actives non diffusées)
     try {
-      const yesterday = await fetchMeta(`${pdv.ad_account_id}/insights?fields=campaign_id,spend&date_preset=yesterday&level=campaign&limit=200`, pdv.fb_token)
-      const yesterdaySpend = new Set((yesterday.data||[]).filter(r=>parseFloat(r.spend)>0).map(r=>r.campaign_id))
+      let yesterdayAll = []
+      for (const accountId of accountIds) {
+        const y = await fetchMeta(`${accountId}/insights?fields=campaign_id,spend&date_preset=yesterday&level=campaign&limit=200`, pdv.fb_token)
+        yesterdayAll = yesterdayAll.concat(y.data||[])
+      }
+      const yesterdaySpend = new Set(yesterdayAll.filter(r=>parseFloat(r.spend)>0).map(r=>r.campaign_id))
       const today = new Date(); today.setHours(0,0,0,0)
       merged.forEach(r => {
         const stopDate = r.date_stop ? new Date(r.date_stop) : null
