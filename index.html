@@ -1177,7 +1177,7 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
         </div>
       </div>`
     }).join('<hr style="border:none;border-top:0.5px solid var(--bd);margin:10px 0">')
-    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem 1rem;background:var(--bg3)">${html}</td>`
+    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem 1rem;background:var(--bg3)">${html}<div style="margin-top:10px;font-size:10px;color:var(--tx3)">* Données issues de l'API Meta — peuvent différer du gestionnaire si Advantage+ est actif.</div></td>`
   } catch(e) {
     detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3);font-size:12px;color:var(--red)">Erreur : ${e.message}</td>`
   }
