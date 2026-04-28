@@ -972,23 +972,34 @@ async function loadAds(pdv, force, period) {
     }
     // Filtrer par page_id si configuré
     const filterPageId = pdv.filter_page_id || pdv.fb_page_id
+    let allowedCampaignIds = null // null = pas de filtre
     if(filterPageId) {
-      // Détection compte partagé depuis la config (plus fiable que depuis les données Meta)
       const allCfg = sheetConfig || DB.cfg
       const myAccountIds = pdv.ad_account_id.split(',').map(s=>s.trim()).filter(Boolean)
       const isSharedAccount = allCfg.some(p => p.id !== pdv.id && p.ad_account_id &&
         p.ad_account_id.split(',').map(s=>s.trim()).some(id => myAccountIds.includes(id)))
-      console.log(`[filter] ${pdv.nom} — filterPageId=${filterPageId} shared=${isSharedAccount} campaigns=${campaigns.length}`)
       if(isSharedAccount) {
-        // Compte partagé : filtre strict — seulement les campagnes explicitement liées à cette page
-        campaigns = campaigns.filter(c => c.promoted_object?.page_id === filterPageId)
+        // Compte partagé : récupérer les campaign_ids via les ad sets filtrés par page
+        // (plus fiable que promoted_object sur les campagnes pour les objectifs REACH/Notoriété)
+        allowedCampaignIds = new Set()
+        const asFilter = encodeURIComponent(JSON.stringify([{field:'promoted_object.page_id',operator:'EQUAL',value:filterPageId}]))
+        for(const accountId of accountIds) {
+          try {
+            let asurl = `${accountId}/adsets?fields=campaign_id&limit=500&filtering=${asFilter}`
+            while(asurl) {
+              const d = await fetchMeta(asurl, pdv.fb_token)
+              ;(d.data||[]).forEach(as => { if(as.campaign_id) allowedCampaignIds.add(as.campaign_id) })
+              asurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+              if(allowedCampaignIds.size > 3000) break
+            }
+          } catch(e) { console.warn('[filter] adsets fetch:', e.message) }
+        }
+        campaigns = campaigns.filter(c => allowedCampaignIds.has(c.id))
+        console.log(`[filter] ${pdv.nom} partagé — page=${filterPageId} adset_campaign_ids=${allowedCampaignIds.size} campaigns=${campaigns.length}`)
       } else {
-        // Compte dédié : filtre souple — on garde aussi les campagnes sans promoted_object
         campaigns = campaigns.filter(c => !c.promoted_object?.page_id || c.promoted_object.page_id === filterPageId)
+        console.log(`[filter] ${pdv.nom} dédié — campaigns=${campaigns.length}`)
       }
-      console.log(`[filter] après filtre : ${campaigns.length} campagnes`)
-    } else {
-      console.log(`[filter] ${pdv.nom} — pas de filterPageId, aucun filtre appliqué`)
     }
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
@@ -1005,6 +1016,8 @@ async function loadAds(pdv, force, period) {
         if(insights.length > 500) break
       }
     }
+    // Filtrer les insights par les campaign_ids de la bonne page (compte partagé)
+    if(allowedCampaignIds) insights = insights.filter(r => allowedCampaignIds.has(r.campaign_id))
 
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
