@@ -921,19 +921,46 @@ function showForm(id) {
 async function fetchInstagramId() {
   const pageId = document.getElementById('cf-fbid').value.trim()
   const token = document.getElementById('cf-token').value.trim()
+  const adAccountId = (document.getElementById('cf-adid').value.trim().split(',')[0]||'').trim()
   const msg = document.getElementById('cf-igid-msg')
-  if(!pageId || !token) { msg.textContent = 'Renseignez d\'abord le Page ID Facebook et le Token.'; msg.style.color='var(--red)'; return }
+  if(!token) { msg.textContent = 'Renseignez d\'abord le Token.'; msg.style.color='var(--red)'; return }
   msg.textContent = 'Recherche…'; msg.style.color='var(--tx3)'
-  try {
-    const d = await fetchMeta(`${pageId}?fields=instagram_business_account`, token)
-    const igId = d.instagram_business_account?.id
-    if(igId) {
-      document.getElementById('cf-igid').value = igId
-      msg.textContent = 'ID récupéré ✓'; msg.style.color='var(--green)'
-    } else {
-      msg.textContent = 'Aucun compte Instagram lié à cette page.'; msg.style.color='var(--amber)'
-    }
-  } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.style.color='var(--red)' }
+
+  // Essai 1 : instagram_business_account via la page
+  if(pageId) {
+    try {
+      const d = await fetchMeta(`${pageId}?fields=instagram_business_account`, token)
+      const igId = d.instagram_business_account?.id
+      if(igId) { document.getElementById('cf-igid').value = igId; msg.textContent = 'ID récupéré via la page ✓'; msg.style.color='var(--green)'; return }
+    } catch(e) {}
+  }
+
+  // Essai 2 : connected_instagram_account via la page
+  if(pageId) {
+    try {
+      const d = await fetchMeta(`${pageId}?fields=connected_instagram_account`, token)
+      const igId = d.connected_instagram_account?.id
+      if(igId) { document.getElementById('cf-igid').value = igId; msg.textContent = 'ID récupéré (compte connecté) ✓'; msg.style.color='var(--green)'; return }
+    } catch(e) {}
+  }
+
+  // Essai 3 : scanner les adsets du compte publicitaire pour trouver les instagram_actor_id
+  if(adAccountId) {
+    try {
+      const d = await fetchMeta(`${adAccountId}/adsets?fields=instagram_actor_id&limit=100`, token)
+      const ids = [...new Set((d.data||[]).filter(a=>a.instagram_actor_id).map(a=>a.instagram_actor_id))]
+      if(ids.length === 1) {
+        document.getElementById('cf-igid').value = ids[0]
+        msg.textContent = 'ID trouvé dans les pubs ✓'; msg.style.color='var(--green)'
+      } else if(ids.length > 1) {
+        msg.textContent = `Plusieurs comptes détectés : ${ids.join(' / ')} — saisissez le bon manuellement`; msg.style.color='var(--amber)'
+      } else {
+        msg.textContent = 'Aucun compte Instagram trouvé sur ce compte publicitaire.'; msg.style.color='var(--amber)'
+      }
+    } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.style.color='var(--red)' }
+    return
+  }
+  msg.textContent = 'Introuvable — saisissez l\'ID manuellement.'; msg.style.color='var(--amber)'
 }
 
 async function savePDV(existingId) {
