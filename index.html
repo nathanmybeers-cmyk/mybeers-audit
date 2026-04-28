@@ -739,6 +739,7 @@ function nav(v) {
 }
 function navPDV(id) {
   if(window.innerWidth <= 768) closeSidebar()
+  currentTypeFilter = null
   document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.remove('active'))
   document.querySelectorAll('.pdv-item').forEach(e=>e.classList.toggle('active',e.dataset.pdv===id))
   buildSidebar(id)
@@ -1068,6 +1069,7 @@ async function loadGMB(pdv, force) {
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 let charts = {}
 let currentPeriod = '30d'
+let currentTypeFilter = null
 
 async function renderDash(pdvId, force, period) {
   const pdv = (sheetConfig || DB.cfg).find(x=>x.id===pdvId)
@@ -1248,7 +1250,14 @@ function renderAdsTab(data, pdv, allData) {
   const filtered = getFiltered(data, allData||data)
   if(!filtered.length) return periodSel+`<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
 
-  const rows = computeTypes(filtered)
+  const allRows = computeTypes(filtered)
+  const allTypes = [...new Set(allRows.map(r=>r._type))].sort()
+  const rows = currentTypeFilter ? allRows.filter(r=>r._type===currentTypeFilter) : allRows
+
+  const typeFilterSel = `<div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-sm${!currentTypeFilter?' btn-primary':''}" onclick="filterByType('${pdv.id}',null)">Tous</button>
+    ${allTypes.map(type=>`<button class="btn btn-sm${currentTypeFilter===type?' btn-primary':''}" onclick="filterByType('${pdv.id}','${type}')">${type}</button>`).join('')}
+  </div>`
   const totalSpend=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
   const totalReach=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
   const totalImpr=rows.reduce((a,r)=>a+(parseInt(r.impressions)||0),0)
@@ -1388,7 +1397,7 @@ function renderAdsTab(data, pdv, allData) {
     </tr>`
   }).join('')
 
-  return `${periodSel}
+  return `${periodSel}${typeFilterSel}
     <div class="kgrid" style="margin-bottom:1.25rem">
       <div class="kc"><div class="kl">Budget (${periodLabel2})</div><div class="kv">${fmtE(totalSpend)}</div></div>
       <div class="kc"><div class="kl">Couverture</div><div class="kv">${fmt(totalReach)}</div></div>
@@ -1611,8 +1620,23 @@ function renderGMBTab(data, pdv) {
 
 // ── CHANGE PERIOD ──────────────────────────────────────────────────────────
 function changePeriod(pdvId, period) {
+  currentTypeFilter = null
   currentPeriod = period
   renderDash(pdvId, false, period)
+}
+
+function filterByType(pdvId, type) {
+  currentTypeFilter = type
+  const pdv = (sheetConfig || DB.cfg).find(x => x.id === pdvId)
+  if (!pdv) return
+  const data = DB.getCache(pdvId, 'ads_' + currentPeriod)
+  const allData = DB.getCache(pdvId, 'ads_max')
+  const tab = document.getElementById('t-ads')
+  if (tab) tab.innerHTML = renderAdsTab(data, pdv, allData)
+  setTimeout(() => {
+    const base = computeTypes(getFiltered(data, allData||data))
+    drawAdsChart(type ? base.filter(r=>r._type===type) : base)
+  }, 50)
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
