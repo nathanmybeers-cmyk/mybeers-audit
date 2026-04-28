@@ -973,14 +973,22 @@ async function loadAds(pdv, force, period) {
     // Filtrer par page_id si configuré
     const filterPageId = pdv.filter_page_id || pdv.fb_page_id
     if(filterPageId) {
-      const pageIds = new Set(campaigns.filter(c => c.promoted_object?.page_id).map(c => c.promoted_object.page_id))
-      if(pageIds.size > 1) {
-        // Compte partagé entre plusieurs pages : filtre strict — seulement les campagnes explicitement liées à cette page
+      // Détection compte partagé depuis la config (plus fiable que depuis les données Meta)
+      const allCfg = sheetConfig || DB.cfg
+      const myAccountIds = pdv.ad_account_id.split(',').map(s=>s.trim()).filter(Boolean)
+      const isSharedAccount = allCfg.some(p => p.id !== pdv.id && p.ad_account_id &&
+        p.ad_account_id.split(',').map(s=>s.trim()).some(id => myAccountIds.includes(id)))
+      console.log(`[filter] ${pdv.nom} — filterPageId=${filterPageId} shared=${isSharedAccount} campaigns=${campaigns.length}`)
+      if(isSharedAccount) {
+        // Compte partagé : filtre strict — seulement les campagnes explicitement liées à cette page
         campaigns = campaigns.filter(c => c.promoted_object?.page_id === filterPageId)
-      } else if(pageIds.size === 1) {
-        // Compte dédié : filtre souple — on garde aussi les campagnes sans promoted_object (Notoriété, Couverture…)
+      } else {
+        // Compte dédié : filtre souple — on garde aussi les campagnes sans promoted_object
         campaigns = campaigns.filter(c => !c.promoted_object?.page_id || c.promoted_object.page_id === filterPageId)
       }
+      console.log(`[filter] après filtre : ${campaigns.length} campagnes`)
+    } else {
+      console.log(`[filter] ${pdv.nom} — pas de filterPageId, aucun filtre appliqué`)
     }
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
