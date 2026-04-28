@@ -901,7 +901,7 @@ function showForm(id) {
       </div>
       <div style="margin-bottom:10px"><label>Token d'accès Meta (longue durée)</label><input id="cf-token" class="token-field" value="${p?.fb_token||''}" placeholder="EAAZCDhr..."></div>
       <div class="fg2" style="gap:10px;margin-bottom:10px">
-        <div><label>ID compte Instagram <span style="font-weight:400;color:var(--tx2)">(compte partagé, pubs Instagram)</span></label><input id="cf-igid" value="${p?.instagram_account_id||''}" placeholder="Ex : 17841400000000000"></div>
+        <div><label>ID compte Instagram <span style="font-weight:400;color:var(--tx2)">(compte partagé, pubs Instagram)</span></label><div style="display:flex;gap:6px;align-items:center"><input id="cf-igid" value="${p?.instagram_account_id||''}" placeholder="Ex : 17841400000000000" style="flex:1"><button type="button" class="btn btn-sm" onclick="fetchInstagramId()" style="white-space:nowrap">Récupérer</button></div><span id="cf-igid-msg" style="font-size:11px;color:var(--tx3)"></span></div>
         <div><label>Page ID de filtrage <span style="font-weight:400;color:var(--tx2)">(compte partagé, pubs Facebook)</span></label><input id="cf-filter-page" value="${p?.filter_page_id||''}" placeholder="Ex : 609686032238115"></div>
       </div>
       <div class="sep"></div>
@@ -916,6 +916,24 @@ function showForm(id) {
       </div>
       <div id="cf-msg" style="font-size:12px;margin-top:6px;color:var(--red)"></div>
     </div>`
+}
+
+async function fetchInstagramId() {
+  const pageId = document.getElementById('cf-fbid').value.trim()
+  const token = document.getElementById('cf-token').value.trim()
+  const msg = document.getElementById('cf-igid-msg')
+  if(!pageId || !token) { msg.textContent = 'Renseignez d\'abord le Page ID Facebook et le Token.'; msg.style.color='var(--red)'; return }
+  msg.textContent = 'Recherche…'; msg.style.color='var(--tx3)'
+  try {
+    const d = await fetchMeta(`${pageId}?fields=instagram_business_account`, token)
+    const igId = d.instagram_business_account?.id
+    if(igId) {
+      document.getElementById('cf-igid').value = igId
+      msg.textContent = 'ID récupéré ✓'; msg.style.color='var(--green)'
+    } else {
+      msg.textContent = 'Aucun compte Instagram lié à cette page.'; msg.style.color='var(--amber)'
+    }
+  } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.style.color='var(--red)' }
 }
 
 async function savePDV(existingId) {
