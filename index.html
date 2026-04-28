@@ -970,13 +970,15 @@ async function loadAds(pdv, force, period) {
         if(campaigns.length > 1000) break
       }
     }
-    // Filtrer par page_id si configuré et si promoted_object disponible
+    // Filtrer par page_id si configuré
     const filterPageId = pdv.filter_page_id || pdv.fb_page_id
     if(filterPageId) {
-      const hasPromotedObject = campaigns.some(c => c.promoted_object?.page_id)
-      if(hasPromotedObject) {
-        // Exclure uniquement les campagnes qui pointent explicitement vers une AUTRE page.
-        // Les campagnes sans promoted_object (type Couverture, Notoriété…) sont conservées.
+      const pageIds = new Set(campaigns.filter(c => c.promoted_object?.page_id).map(c => c.promoted_object.page_id))
+      if(pageIds.size > 1) {
+        // Compte partagé entre plusieurs pages : filtre strict — seulement les campagnes explicitement liées à cette page
+        campaigns = campaigns.filter(c => c.promoted_object?.page_id === filterPageId)
+      } else if(pageIds.size === 1) {
+        // Compte dédié : filtre souple — on garde aussi les campagnes sans promoted_object (Notoriété, Couverture…)
         campaigns = campaigns.filter(c => !c.promoted_object?.page_id || c.promoted_object.page_id === filterPageId)
       }
     }
@@ -1698,7 +1700,7 @@ async function renderComparatif(){
   await loadComparatifMonth(currentComparatifMois)
 }
 
-async function loadComparatifMonth(mois){
+async function loadComparatifMonth(mois, forceAds=false){
   currentComparatifMois=mois
   const body=document.getElementById('comp-body')
   if(!body) return
@@ -1718,8 +1720,8 @@ async function loadComparatifMonth(mois){
       const pdv=missing[i]
       body.innerHTML=monthSel+`<div style="padding:1rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Calcul en cours… ${i+1}/${missing.length} — ${pdv.nom.replace('My Beers ','')}</div>`
       try{
-        let adsMax=DB.getCache(pdv.id,'ads_max')
-        if(!adsMax||adsMax.error) adsMax=await loadAds(pdv,false,'max')
+        let adsMax = forceAds ? null : DB.getCache(pdv.id,'ads_max')
+        if(!adsMax||adsMax.error) adsMax=await loadAds(pdv, forceAds, 'max')
         if(!adsMax||adsMax.error||!Array.isArray(adsMax)){console.warn(`Comparatif ${pdv.nom}: pas de données ads_max`);continue}
         const metriques=computeMonthMetrics(adsMax,mois)
         if(!metriques){console.warn(`Comparatif ${pdv.nom}: aucune pub en ${mois}`);continue}
@@ -1734,7 +1736,7 @@ async function loadComparatifMonth(mois){
 async function recalculerComparatif(mois){
   if(currentRole!=='admin') return
   try{await supabaseFetch(`comparatif_mensuel?mois=eq.${mois}`,{method:'DELETE'})}catch(e){}
-  await loadComparatifMonth(mois)
+  await loadComparatifMonth(mois, true)
 }
 
 async function calculerManquants(mois){
