@@ -944,23 +944,38 @@ async function fetchInstagramId() {
     } catch(e) {}
   }
 
-  // Essai 3 : scanner les adsets du compte publicitaire pour trouver les instagram_actor_id
+  // Essai 3 : instagram_accounts (pluriel) via la page
+  if(pageId) {
+    try {
+      const d = await fetchMeta(`${pageId}?fields=instagram_accounts{id,username}`, token)
+      const accounts = d.instagram_accounts?.data || []
+      if(accounts.length === 1) {
+        document.getElementById('cf-igid').value = accounts[0].id
+        msg.textContent = `ID récupéré (@${accounts[0].username}) ✓`; msg.style.color='var(--green)'; return
+      } else if(accounts.length > 1) {
+        msg.textContent = `Plusieurs comptes : ${accounts.map(a=>`${a.id} (@${a.username})`).join(' / ')} — saisissez le bon`; msg.style.color='var(--amber)'; return
+      }
+    } catch(e) {}
+  }
+
+  // Essai 4 : scanner les ads (pas les adsets) pour instagram_actor_id
   if(adAccountId) {
     try {
-      const d = await fetchMeta(`${adAccountId}/adsets?fields=instagram_actor_id&limit=100`, token)
+      const d = await fetchMeta(`${adAccountId}/ads?fields=instagram_actor_id&limit=200`, token)
       const ids = [...new Set((d.data||[]).filter(a=>a.instagram_actor_id).map(a=>a.instagram_actor_id))]
       if(ids.length === 1) {
         document.getElementById('cf-igid').value = ids[0]
-        msg.textContent = 'ID trouvé dans les pubs ✓'; msg.style.color='var(--green)'
+        msg.textContent = 'ID trouvé dans les créatifs ✓'; msg.style.color='var(--green)'; return
       } else if(ids.length > 1) {
-        msg.textContent = `Plusieurs comptes détectés : ${ids.join(' / ')} — saisissez le bon manuellement`; msg.style.color='var(--amber)'
-      } else {
-        msg.textContent = 'Aucun compte Instagram trouvé sur ce compte publicitaire.'; msg.style.color='var(--amber)'
+        msg.textContent = `Plusieurs comptes détectés : ${ids.join(' / ')} — saisissez le bon manuellement`; msg.style.color='var(--amber)'; return
       }
-    } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.style.color='var(--red)' }
-    return
+    } catch(e) {}
   }
-  msg.textContent = 'Introuvable — saisissez l\'ID manuellement.'; msg.style.color='var(--amber)'
+
+  // Aucune méthode automatique n'a fonctionné — lien de lookup manuel
+  const igHandle = '' // inconnu
+  msg.innerHTML = `Introuvable automatiquement. <a href="https://www.lookup-id.com" target="_blank" style="color:var(--blue)">Chercher sur lookup-id.com</a> avec le nom d'utilisateur Instagram (@mybeers…).`
+  msg.style.color='var(--amber)'
 }
 
 async function savePDV(existingId) {
