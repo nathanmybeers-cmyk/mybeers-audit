@@ -586,7 +586,7 @@ const DB = {
   get cfg(){ try{ return JSON.parse(localStorage.getItem('rsf_cfg')||'[]') }catch(e){ return [] } },
   set cfg(v){ localStorage.setItem('rsf_cfg', JSON.stringify(v)) },
   getCache(id,t){ try{ const r=JSON.parse(localStorage.getItem(`rsf_c_${id}_${t}`)||'null'); if(!r) return null; if(Date.now()-r.ts > 7*86400000) return null; return r.d }catch(e){ return null } },
-  setCache(id,t,d){ localStorage.setItem(`rsf_c_${id}_${t}`, JSON.stringify({ts:Date.now(),d})) },
+  setCache(id,t,d){ try{ localStorage.setItem(`rsf_c_${id}_${t}`, JSON.stringify({ts:Date.now(),d})) }catch(e){ if(e.name==='QuotaExceededError'||e.code===22){ Object.keys(localStorage).filter(k=>k.startsWith('rsf_c_')).forEach(k=>localStorage.removeItem(k)); try{ localStorage.setItem(`rsf_c_${id}_${t}`, JSON.stringify({ts:Date.now(),d})) }catch(e2){ console.warn('Cache trop volumineux, non sauvegardé',e2) } } } },
   clearCache(id){ Object.keys(localStorage).filter(k=>k.startsWith(`rsf_c_${id}`)).forEach(k=>localStorage.removeItem(k)) }
 }
 
