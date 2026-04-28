@@ -973,6 +973,7 @@ async function loadAds(pdv, force, period) {
     }
     const campMap = {}
     campaigns.forEach(c=>{ campMap[c.id] = c })
+    console.log(`[DEBUG ${pdv.nom}] Campagnes brutes API: ${campaigns.length} — après filtre page: ${Object.keys(campMap).length} — filterPageId: ${filterPageId||'aucun'}`)
 
     const preset = period==='max' ? 'maximum' : 'last_30d'
     let insights=[], iurl=`${pdv.ad_account_id}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
@@ -982,6 +983,7 @@ async function loadAds(pdv, force, period) {
       iurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
       if(insights.length > 500) break
     }
+    console.log(`[DEBUG ${pdv.nom}] Insights API (${preset}): ${insights.length}`)
 
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
