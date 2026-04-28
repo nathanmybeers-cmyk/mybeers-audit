@@ -173,6 +173,7 @@ table.t tr:hover td{background:var(--bg3)}
     </div>
     <div class="ns">Navigation</div>
     <div class="ni active" data-v="accueil">Accueil</div>
+    <div class="ni" data-v="comparatif">Comparatif global</div>
     <div class="ni" data-v="config" id="nav-config">Gérer les établissements</div>
     <div class="ns">Établissements</div>
     <div id="pdv-list"></div>
@@ -735,6 +736,7 @@ function nav(v) {
   document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.toggle('active',e.dataset.v===v))
   document.querySelectorAll('.pdv-item').forEach(e=>e.classList.remove('active'))
   if(v==='accueil'){ setMobTitle('Tableau de bord'); renderAccueil() }
+  else if(v==='comparatif'){ setMobTitle('Comparatif global'); renderComparatif() }
   else if(v==='config'){ setMobTitle('Établissements'); renderConfig() }
 }
 function navPDV(id) {
@@ -1616,6 +1618,162 @@ function renderGMBTab(data, pdv) {
         </div>`
       }).join('')}
     </div>`
+}
+
+// ── COMPARATIF GLOBAL ──────────────────────────────────────────────────────
+const MOIS_NOMS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+
+function getCompletedMonths(n=12){
+  const months=[],now=new Date()
+  let y=now.getFullYear(),m=now.getMonth()-1
+  if(m<0){m=11;y--}
+  for(let i=0;i<n;i++){
+    months.push(`${y}-${String(m+1).padStart(2,'0')}`)
+    m--;if(m<0){m=11;y--}
+  }
+  return months
+}
+
+function moisLabel(mois){
+  const [y,m]=mois.split('-').map(Number)
+  return `${MOIS_NOMS[m-1]} ${y}`
+}
+
+function computeMonthMetrics(adsMax,mois){
+  const [year,month]=mois.split('-').map(Number)
+  const monthRows=(adsMax||[]).filter(r=>{
+    if(!r.date_start) return false
+    const d=new Date(r.date_start)
+    return d.getFullYear()===year&&d.getMonth()===month-1
+  })
+  if(!monthRows.length) return null
+  const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
+  const DUREE_MIN_C={'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5}
+  const BUDGET_CIBLE_C={'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30}
+  const rows=computeTypes(monthRows)
+  const nb_pubs=rows.length
+  const budget_total=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
+  const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
+  // Score durée
+  const dRows=rows.filter(r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;return d!==null&&(DUREE_MIN_C[r._type]!==undefined||r._type==='Soirée')})
+  const dVert=dRows.filter(r=>{const d=Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000);const ol=objMap[r.objective]||r.objective||'—';let min=DUREE_MIN_C[r._type];if(r._type==='Soirée')min=ol==='Événement'?14:5;return min!==undefined&&d>=min}).length
+  const score_duree=dRows.length>0?dVert/dRows.length:null
+  // Score budget
+  const getBT=r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;if(r.lifetime_budget)return r.lifetime_budget;if(r.daily_budget&&d)return r.daily_budget*d;return null}
+  const bgMap={}
+  rows.forEach(r=>{if(r._type==='Soirée')return;const cible=BUDGET_CIBLE_C[r._type];if(!cible)return;const key=`${r._type}_${r.date_stop}`;if(!bgMap[key])bgMap[key]={cible,total:0,ids:[]};const bt=getBT(r);if(bt)bgMap[key].total+=bt;bgMap[key].ids.push(r.campaign_id)})
+  const bBadge={}
+  Object.values(bgMap).forEach(g=>{const cls=g.total/g.cible>=0.9?'ok':g.total/g.cible>=0.7?'warn':'bad';g.ids.forEach(id=>{bBadge[id]=cls})})
+  const bRows=rows.filter(r=>{const bt=getBT(r);if(!bt)return false;const ol=objMap[r.objective]||r.objective||'—';if(r._type==='Soirée')return['Événement','Interaction','Trafic'].includes(ol);return BUDGET_CIBLE_C[r._type]!==undefined})
+  const bVert=bRows.filter(r=>{if(r._type==='Soirée'){const bt=getBT(r);const ol=objMap[r.objective]||r.objective||'—';return bt/(ol==='Événement'?100:50)>=0.9}return bBadge[r.campaign_id]==='ok'}).length
+  const score_budget=bRows.length>0?bVert/bRows.length:null
+  // Score objectif
+  const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
+  const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
+  const score_objectif=oRows.length>0?oVert/oRows.length:null
+  // Score global
+  const scores=[score_duree,score_budget,score_objectif].filter(s=>s!==null)
+  const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
+  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_global}
+}
+
+async function saveComparatifEntry(etablissement_id,mois,metriques){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/comparatif_mensuel`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({etablissement_id,mois,metriques})
+  })
+  if(!r.ok) throw new Error(`Supabase ${r.status}`)
+}
+
+let currentComparatifMois=null
+let compSortCol='score_global',compSortAsc=false,compCurrentData={}
+
+async function renderComparatif(){
+  const months=getCompletedMonths(12)
+  if(!currentComparatifMois||!months.includes(currentComparatifMois)) currentComparatifMois=months[0]
+  document.getElementById('main').innerHTML=`
+    <div class="topbar"><h1>Comparatif global</h1></div>
+    <div id="comp-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Chargement…</div></div>`
+  await loadComparatifMonth(currentComparatifMois)
+}
+
+async function loadComparatifMonth(mois){
+  currentComparatifMois=mois
+  const body=document.getElementById('comp-body')
+  if(!body) return
+  const cfg=sheetConfig||DB.cfg
+  const months=getCompletedMonths(12)
+  const monthSel=`<div style="display:flex;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap">${months.map(m=>`<button class="btn btn-sm${m===mois?' btn-primary':''}" onclick="loadComparatifMonth('${m}')">${moisLabel(m)}</button>`).join('')}</div>`
+  body.innerHTML=monthSel+`<div style="padding:1rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Vérification Supabase…</div>`
+
+  let supaRows=[]
+  try{supaRows=await supabaseFetch(`comparatif_mensuel?mois=eq.${mois}&select=*`)||[]}catch(e){supaRows=[]}
+  const supaMap={}
+  supaRows.forEach(r=>{supaMap[r.etablissement_id]=r.metriques})
+
+  const missing=cfg.filter(p=>p.ad_account_id&&p.fb_token&&!supaMap[p.id])
+  if(currentRole==='admin'&&missing.length>0){
+    body.innerHTML=monthSel+`<div style="padding:1rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Calcul des données manquantes (${missing.length} établissement${missing.length>1?'s':''})…</div>`
+    await Promise.all(missing.map(async pdv=>{
+      try{
+        let adsMax=DB.getCache(pdv.id,'ads_max')
+        if(!adsMax||adsMax.error) adsMax=await loadAds(pdv,false,'max')
+        if(!adsMax||adsMax.error||!Array.isArray(adsMax)) return
+        const metriques=computeMonthMetrics(adsMax,mois)
+        if(!metriques) return
+        supaMap[pdv.id]=metriques
+        await saveComparatifEntry(pdv.id,mois,metriques)
+      }catch(e){console.warn(`Comparatif ${pdv.nom}:`,e.message)}
+    }))
+  }
+  body.innerHTML=monthSel+renderComparatifTable(mois,supaMap,cfg)
+}
+
+async function recalculerComparatif(mois){
+  if(currentRole!=='admin') return
+  try{await supabaseFetch(`comparatif_mensuel?mois=eq.${mois}`,{method:'DELETE'})}catch(e){}
+  await loadComparatifMonth(mois)
+}
+
+function renderComparatifTable(mois,supaMap,cfg){
+  compCurrentData={mois,supaMap,cfg}
+  const entries=cfg.filter(p=>supaMap[p.id]).map(p=>({pdv:p,m:supaMap[p.id]}))
+  const noData=cfg.filter(p=>p.ad_account_id&&p.fb_token&&!supaMap[p.id])
+  if(!entries.length) return `<div class="card"><p class="empty">Aucune donnée pour ${moisLabel(mois)}.</p>${currentRole==='admin'?`<div style="margin-top:12px"><button class="btn btn-primary" onclick="recalculerComparatif('${mois}')">Calculer</button></div>`:''}</div>`
+  const sc=s=>s===null?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
+  const sp=s=>s===null?'—':`${Math.round(s*100)}%`
+  const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
+  const sorted=[...entries].sort((a,b)=>{const va=a.m[compSortCol]??-1,vb=b.m[compSortCol]??-1;return compSortAsc?va-vb:vb-va})
+  const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
+  const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
+  const trows=sorted.map((e,i)=>{const m=e.m;return `<tr>
+    <td style="font-weight:600;color:var(--tx3)">${i+1}</td>
+    <td class="tal"><strong>${e.pdv.nom.replace('My Beers ','')}</strong></td>
+    <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
+    <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
+    <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
+    <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
+    <td><span style="font-size:15px;font-weight:700;color:${sc(m.score_global)}">${sp(m.score_global)}</span></td>
+  </tr>`}).join('')
+  return `<div class="card" id="comp-table-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+      <div class="ct" style="margin:0">${moisLabel(mois)} — ${sorted.length} établissement${sorted.length>1?'s':''}</div>
+      ${currentRole==='admin'?`<button class="btn" onclick="recalculerComparatif('${mois}')">Recalculer</button>`:''}
+    </div>
+    <div class="tbl-wrap"><table class="t">
+      <thead><tr><th>#</th><th class="tal">Établissement</th>${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}</tr></thead>
+      <tbody>${trows}</tbody>
+    </table></div>
+    ${noData.length?`<p style="font-size:11px;color:var(--tx3);margin-top:8px">Non disponibles : ${noData.map(p=>p.nom.replace('My Beers ','')).join(', ')}</p>`:''}
+  </div>`
+}
+
+function sortComparatif(col){
+  if(compSortCol===col) compSortAsc=!compSortAsc
+  else{compSortCol=col;compSortAsc=false}
+  const wrap=document.getElementById('comp-table-wrap')
+  if(wrap&&compCurrentData.supaMap) wrap.outerHTML=renderComparatifTable(compCurrentData.mois,compCurrentData.supaMap,compCurrentData.cfg)
 }
 
 // ── CHANGE PERIOD ──────────────────────────────────────────────────────────
