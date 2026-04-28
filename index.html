@@ -1147,6 +1147,10 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
     }
     const fmtGeo = t => {
       const gl = t.geo_locations || {}
+      if (gl.custom_locations?.length) return gl.custom_locations.map(c => {
+        const name = (c.name||c.address_string||'').split(',')[0].trim() || 'Position'
+        return `${name}${c.radius ? ` +${c.radius}km` : ''}`
+      }).join(', ')
       if (gl.cities?.length) return gl.cities.map(c => `${c.name}${c.radius ? ` +${c.radius}km` : ''}`).join(', ')
       if (gl.regions?.length) return gl.regions.map(r => r.name).join(', ')
       if (gl.countries?.length) return gl.countries.join(', ')
@@ -1176,7 +1180,7 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
         </div>
       </div>`
     }).join('<hr style="border:none;border-top:0.5px solid var(--bd);margin:10px 0">')
-    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem 1rem;background:var(--bg3)">${html}<div style="margin-top:10px;font-size:10px;color:var(--tx3)">* Données issues de l'API Meta — peuvent différer du gestionnaire si Advantage+ est actif.</div></td>`
+    detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem 1rem;background:var(--bg3)">${html}</td>`
   } catch(e) {
     detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3);font-size:12px;color:var(--red)">Erreur : ${e.message}</td>`
   }
