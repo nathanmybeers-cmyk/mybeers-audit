@@ -972,9 +972,8 @@ async function fetchInstagramId() {
     } catch(e) {}
   }
 
-  // Aucune méthode automatique n'a fonctionné — lien de lookup manuel
-  const igHandle = '' // inconnu
-  msg.innerHTML = `Introuvable automatiquement. <a href="https://www.lookup-id.com" target="_blank" style="color:var(--blue)">Chercher sur lookup-id.com</a> avec le nom d'utilisateur Instagram (@mybeers…).`
+  // Aucune méthode automatique n'a fonctionné — instructions manuelles
+  msg.innerHTML = `Introuvable automatiquement. <a href="https://commentpicker.com/instagram-user-id.php" target="_blank" style="color:var(--blue)">Ouvrir l'outil</a> et saisir le nom d'utilisateur Instagram de l'établissement.`
   msg.style.color='var(--amber)'
 }
 
