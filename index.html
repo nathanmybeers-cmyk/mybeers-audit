@@ -966,7 +966,9 @@ async function loadAds(pdv, force, period) {
     if(filterPageId) {
       const hasPromotedObject = campaigns.some(c => c.promoted_object?.page_id)
       if(hasPromotedObject) {
-        campaigns = campaigns.filter(c => c.promoted_object?.page_id === filterPageId)
+        // Exclure uniquement les campagnes qui pointent explicitement vers une AUTRE page.
+        // Les campagnes sans promoted_object (type Couverture, Notoriété…) sont conservées.
+        campaigns = campaigns.filter(c => !c.promoted_object?.page_id || c.promoted_object.page_id === filterPageId)
       }
     }
     const campMap = {}
