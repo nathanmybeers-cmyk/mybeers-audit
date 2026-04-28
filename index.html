@@ -1081,7 +1081,7 @@ async function renderDash(pdvId, force, period) {
       <div style="display:flex;gap:8px;align-items:center">
         <span id="cache-ts" style="font-size:11px;color:var(--tx3)"></span>
         <button class="btn" onclick="renderDash('${pdvId}',true)">Actualiser</button>
-        ${currentRole==='admin'?`<button class="btn" onclick="showForm('${pdvId}');nav('config')">Configurer</button>`:''}
+        ${currentRole==='admin'?`<button class="btn" onclick="nav('config');showForm('${pdvId}')">Configurer</button>`:''}
         <button class="btn btn-primary" onclick="exportPDF('${pdvId}')" style="background:var(--green);color:#fff;border-color:var(--green)">⬇ PDF</button>
       </div>
     </div>
