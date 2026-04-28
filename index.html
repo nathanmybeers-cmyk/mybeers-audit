@@ -980,7 +980,7 @@ async function loadAds(pdv, force, period) {
         p.ad_account_id.split(',').map(s=>s.trim()).some(id => myAccountIds.includes(id)))
       if(isSharedAccount) {
         allowedCampaignIds = new Set()
-        // Phase 1 : ad sets avec promoted_object.page_id en lecture (sans filtre API)
+        // Phase 1 : ad sets avec promoted_object.page_id en lecture
         for(const accountId of accountIds) {
           try {
             let asurl = `${accountId}/adsets?fields=campaign_id,promoted_object{page_id}&limit=200`
@@ -995,16 +995,18 @@ async function loadAds(pdv, force, period) {
           } catch(e) { console.warn('[filter] adsets:', e.message) }
         }
         console.log(`[filter] phase 1 adsets — campaign_ids=${allowedCampaignIds.size}`)
-        // Phase 2 (fallback) : créatifs des ads — object_story_id est au format PAGE_ID_POST_ID
+        // Phase 2 : créatifs des ads — object_story_id (PAGE_ID_POST_ID) ou object_story_spec.page_id
         if(allowedCampaignIds.size === 0) {
           for(const accountId of accountIds) {
             try {
-              let adurl = `${accountId}/ads?fields=campaign_id,creative{object_story_id}&limit=200`
+              let adurl = `${accountId}/ads?fields=campaign_id,creative{object_story_id,effective_object_story_id,object_story_spec{page_id}}&limit=200`
               while(adurl) {
                 const d = await fetchMeta(adurl, pdv.fb_token)
                 ;(d.data||[]).forEach(ad => {
-                  const storyId = ad.creative?.object_story_id || ''
-                  if(ad.campaign_id && storyId.split('_')[0] === filterPageId) allowedCampaignIds.add(ad.campaign_id)
+                  const sid = ad.creative?.object_story_id || ad.creative?.effective_object_story_id || ''
+                  const pageFromStory = sid ? sid.split('_')[0] : ''
+                  const pageFromSpec = ad.creative?.object_story_spec?.page_id || ''
+                  if(ad.campaign_id && (pageFromStory === filterPageId || pageFromSpec === filterPageId)) allowedCampaignIds.add(ad.campaign_id)
                 })
                 adurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
                 if(allowedCampaignIds.size > 3000) break
@@ -1013,7 +1015,13 @@ async function loadAds(pdv, force, period) {
           }
           console.log(`[filter] phase 2 créatifs — campaign_ids=${allowedCampaignIds.size}`)
         }
-        campaigns = campaigns.filter(c => allowedCampaignIds.has(c.id))
+        // Si aucune des deux phases n'a trouvé de données, ne pas filtrer (évite un tableau vide)
+        if(allowedCampaignIds.size > 0) {
+          campaigns = campaigns.filter(c => allowedCampaignIds.has(c.id))
+        } else {
+          console.warn(`[filter] ${pdv.nom} — impossible de filtrer par page, toutes les campagnes affichées`)
+          allowedCampaignIds = null
+        }
         console.log(`[filter] ${pdv.nom} partagé — campaigns final=${campaigns.length}`)
       } else {
         campaigns = campaigns.filter(c => !c.promoted_object?.page_id || c.promoted_object.page_id === filterPageId)
