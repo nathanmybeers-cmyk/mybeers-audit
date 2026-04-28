@@ -1162,7 +1162,7 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
     const html = adsets.map(as => {
       const t = as.targeting || {}
       const age = (t.age_min||t.age_max) ? `${t.age_min||'?'}–${t.age_max||'?'} ans` : '—'
-      const gender = !t.genders?.length ? 'Tous' : t.genders.map(g => g===1?'Hommes':'Femmes').join(' + ')
+      const gender = !t.genders?.length || (t.genders.includes(1) && t.genders.includes(2)) ? 'Tous' : t.genders.map(g => g===1?'Hommes':'Femmes').join(' + ')
       const zone = fmtGeo(t)
       const interests = fmtInterests(t)
       const customAud = (t.custom_audiences||[]).map(a => a.name).filter(Boolean)
