@@ -683,6 +683,8 @@ function computeTypes(rows) {
     if(!found && type === 'Divers' && r.objective === 'EVENT_RESPONSES') {
       type = 'Soirée'
     }
+    // Override forcé
+    if(n.includes('palets')) type = 'Divers'
     return {...r, _type: type}
   })
   // 2ème passage héritage
