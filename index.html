@@ -671,6 +671,13 @@ function computeTypes(rows) {
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
     }
+    // Règles émoji/mot-clé en fallback (Divers par défaut uniquement)
+    if(!found && type === 'Divers') {
+      if(n.includes('🎧') || n.includes('dj'))  type = 'Club Mix'
+      else if(n.includes('🎤'))                  type = 'Karaoke'
+      else if(n.includes('🏓'))                  type = 'Beer Pong'
+      else if(n.includes('🎸'))                  type = 'Apéro Concert'
+    }
     // Règle : Divers par défaut (aucun mot-clé) + objectif Événement → Soirée
     if(!found && type === 'Divers' && r.objective === 'EVENT_RESPONSES') {
       type = 'Soirée'
