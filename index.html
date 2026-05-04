@@ -671,6 +671,10 @@ function computeTypes(rows) {
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
     }
+    // Règle : Divers par défaut (aucun mot-clé) + objectif Événement → Soirée
+    if(!found && type === 'Divers' && r.objective === 'EVENT_RESPONSES') {
+      type = 'Soirée'
+    }
     return {...r, _type: type}
   })
   // 2ème passage héritage
