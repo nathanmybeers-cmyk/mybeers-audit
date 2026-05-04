@@ -664,7 +664,8 @@ function detectType(name) {
 function computeTypes(rows) {
   // 1er passage
   const result = rows.map(r => {
-    const isFriday = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
+    const isFriday   = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
+    const isSaturday = r.date_stop ? new Date(r.date_stop).getDay()===6 : false
     const found = detectType(r.campaign_name||'')
     let type = found || (isFriday ? 'Soirée' : 'Divers')
     // Règle spéciale : Célib détecté mais boost finit un vendredi → Soirée
@@ -683,6 +684,8 @@ function computeTypes(rows) {
     if(!found && type === 'Divers' && r.objective === 'EVENT_RESPONSES') {
       type = 'Soirée'
     }
+    // Samedi sans assignation → Apéro Concert
+    if(isSaturday && type === 'Divers') type = 'Apéro Concert'
     // Override forcé
     if(n.includes('palets')) type = 'Divers'
     return {...r, _type: type}
