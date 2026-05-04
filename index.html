@@ -435,7 +435,7 @@ async function exportPDF(pdvId) {
   const tableData = rows.map(r => {
     const name = cleanNamePDF(r.campaign_name||'')
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
-    const plat = (objMap[r.objective]||r.objective||'—')==='Événement' ? 'Event FB' : isIG ? 'Instagram' : 'Facebook'
+    const plat = (objMap[r.objective]||r.objective||'—')==='Événement' ? 'Event FB' : (objMap[r.objective]||r.objective||'—')==='Trafic' ? 'Instagram' : isIG ? 'Instagram' : 'Facebook'
     const today=new Date();today.setHours(0,0,0,0)
     const stopDate=r.date_stop?new Date(r.date_stop):null
     const statut = r.status==='ACTIVE'&&stopDate&&stopDate>=today ? 'En cours' : 'Terminé'
@@ -671,8 +671,8 @@ function computeTypes(rows) {
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
     }
-    // Règles émoji/mot-clé en fallback (Divers par défaut uniquement)
-    if(!found && type === 'Divers') {
+    // Règles émoji/mot-clé en fallback (Divers ou Soirée par défaut uniquement)
+    if(!found && (type === 'Divers' || type === 'Soirée')) {
       if(n.includes('🎧') || n.includes('dj'))  type = 'Club Mix'
       else if(n.includes('🎤'))                  type = 'Karaoke'
       else if(n.includes('🏓'))                  type = 'Beer Pong'
@@ -1446,6 +1446,8 @@ function renderAdsTab(data, pdv, allData) {
     let platBadge
     if(objLabel === 'Événement') {
       platBadge = `<span class="badge bb">Event FB</span>`
+    } else if(objLabel === 'Trafic') {
+      platBadge = `<span class="badge bpi">Instagram</span>`
     } else if(platCount === 1 && type !== 'Soirée') {
       platBadge = `<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:500">
         <span style="background:var(--pink-bg);color:var(--pink-tx);padding:2px 6px">Insta</span>
