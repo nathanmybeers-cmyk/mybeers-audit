@@ -673,8 +673,8 @@ function computeTypes(rows) {
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
     }
-    // Règles émoji/mot-clé en fallback (Divers ou Soirée par défaut uniquement)
-    if(!found && (type === 'Divers' || type === 'Soirée')) {
+    // Règles émoji/mot-clé en fallback (Divers ou Soirée par défaut, sauf si objectif Événement)
+    if(!found && (type === 'Divers' || type === 'Soirée') && r.objective !== 'EVENT_RESPONSES') {
       if(n.includes('🎧') || n.includes('dj'))  type = 'Club Mix'
       else if(n.includes('🎤'))                  type = 'Karaoke'
       else if(n.includes('🏓'))                  type = 'Beer Pong'
@@ -693,7 +693,7 @@ function computeTypes(rows) {
   // 2ème passage héritage
   const map = {}
   result.forEach(r => { if(r._type!=='Divers' && r.date_start && r.date_stop) map[r.date_start+'_'+r.date_stop]=r._type })
-  result.forEach(r => { if(r._type==='Divers' && r.date_start && r.date_stop){ const k=r.date_start+'_'+r.date_stop; if(map[k]) r._type=map[k] } })
+  result.forEach(r => { if((r._type==='Divers'||r._type==='Club Mix') && r.date_start && r.date_stop){ const k=r.date_start+'_'+r.date_stop; if(map[k]) r._type=map[k] } })
   return result
 }
 
