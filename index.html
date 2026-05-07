@@ -608,7 +608,7 @@ const TYPE_DEFS = [
   {label:'Comedy Club',   keys:['stand-up','stand up','comedy']},
   {label:'Open Mix',      keys:['open mix']},
   {label:'Club Mix',      keys:['club mix','club','mix']},
-  {label:'Apéro Quiz',    keys:['apéro quiz','apero quiz','quiz','mardi']},
+  {label:'Apéro Quiz',    keys:['apéro quiz','apero quiz','quiz']},
   {label:'Apéro Concert', keys:['apéro concert','apero concert','concert']},
   {label:'Beer Pong',     keys:['beer pong','pong','championnat']},
   {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl','🎯']},
@@ -666,8 +666,9 @@ function computeTypes(rows) {
   const result = rows.map(r => {
     const isFriday   = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
     const isSaturday = r.date_stop ? new Date(r.date_stop).getDay()===6 : false
+    const isTuesday  = r.date_stop ? new Date(r.date_stop).getDay()===2 : false
     const found = detectType(r.campaign_name||'')
-    let type = found || (isFriday ? 'Soirée' : 'Divers')
+    let type = found || (isFriday ? 'Soirée' : isTuesday ? 'Apéro Quiz' : 'Divers')
     // Règle spéciale : Célib détecté mais boost finit un vendredi → Soirée
     const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
