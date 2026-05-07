@@ -605,18 +605,18 @@ async function fetchMeta(endpoint, token) {
 
 // ── TYPE DETECTION ─────────────────────────────────────────────────────────
 const TYPE_DEFS = [
+  {label:'Comedy Club',   keys:['stand-up','stand up','comedy']},
+  {label:'Open Mix',      keys:['open mix']},
+  {label:'Club Mix',      keys:['club mix','club','mix']},
   {label:'Apéro Quiz',    keys:['apéro quiz','apero quiz','quiz','mardi']},
   {label:'Apéro Concert', keys:['apéro concert','apero concert','concert']},
   {label:'Beer Pong',     keys:['beer pong','pong','championnat']},
   {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl','🎯']},
   {label:'Karaoke',       keys:['karaoké','karaoke']},
   {label:'SBK',           keys:['sbk']},
-  {label:'Open Mix',      keys:['open mix']},
-  {label:'Club Mix',      keys:['club mix','mix']},
   {label:'Soirée',        keys:['open dj set','dj set','full moon','ground room session']},
   {label:'Crush',         keys:['crush','célib','celib','célibataire','celibataire']},
   {label:'Sport',         keys:['vs ','versus','match','foot','rugby','ligue','league','⚽','🏉']},
-  {label:'Comedy Club',   keys:['stand-up','stand up','comedy']},
   {label:'Flash Tattoo',  keys:['tattoo','tatou','tatouage']},
   {label:'Poker',         keys:['poker']},
 ]
@@ -684,16 +684,40 @@ function computeTypes(rows) {
     if(!found && type === 'Divers' && r.objective === 'EVENT_RESPONSES') {
       type = 'Soirée'
     }
-    // Samedi sans assignation → Apéro Concert
-    if(isSaturday && type === 'Divers') type = 'Apéro Concert'
     // Override forcé
     if(n.includes('palets')) type = 'Divers'
-    return {...r, _type: type}
+    return {...r, _type: type, _isDefault: !found, _isSat: isSaturday}
   })
-  // 2ème passage héritage
-  const map = {}
-  result.forEach(r => { if(r._type!=='Divers' && r.date_start && r.date_stop) map[r.date_start+'_'+r.date_stop]=r._type })
-  result.forEach(r => { if((r._type==='Divers'||r._type==='Club Mix') && r.date_start && r.date_stop){ const k=r.date_start+'_'+r.date_stop; if(map[k]) r._type=map[k] } })
+  // 2ème passage héritage : mêmes dates → hérite du type détecté (non par défaut)
+  // Priorité renforcée si les 15 premiers caractères du nom sont identiques
+  const map = {}       // date_start_date_stop → type
+  const strongMap = {} // date_start_date_stop_prefix15 → type (correspondance forte)
+  result.forEach(r => {
+    if(!r._isDefault && r.date_start && r.date_stop) {
+      const k = r.date_start+'_'+r.date_stop
+      map[k] = r._type
+      const prefix = normalizeUnicode(r.campaign_name||'').toLowerCase().slice(0,15)
+      strongMap[k+'_'+prefix] = r._type
+    }
+  })
+  result.forEach(r => {
+    if(!r.date_start || !r.date_stop) return
+    const k = r.date_start+'_'+r.date_stop
+    const prefix = normalizeUnicode(r.campaign_name||'').toLowerCase().slice(0,15)
+    const strongMatch = strongMap[k+'_'+prefix]
+    // Correspondance forte (dates + préfixe 15 car.) → hérite même si type déjà détecté
+    if(strongMatch && r._type !== strongMatch) {
+      r._type = strongMatch
+    // Correspondance dates seules → hérite uniquement si type par défaut ou Club Mix
+    } else if(!strongMatch && (r._isDefault || r._type==='Club Mix')) {
+      const dateMatch = map[k]
+      if(dateMatch) r._type = dateMatch
+    }
+  })
+  // Samedi sans assignation → Apéro Concert (priorité basse, après héritage)
+  result.forEach(r => {
+    if(r._isDefault && r._type==='Divers' && r._isSat) r._type = 'Apéro Concert'
+  })
   return result
 }
 
