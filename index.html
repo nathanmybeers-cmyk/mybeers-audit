@@ -686,7 +686,8 @@ function computeTypes(rows) {
       type = 'Soirée'
     }
     // Override forcé
-    if(n.includes('palets')) type = 'Divers'
+    if(n.includes('palets'))   type = 'Divers'
+    if(n.includes('santiag'))  type = 'Soirée'
     return {...r, _type: type, _isDefault: !found, _isSat: isSaturday}
   })
   // 2ème passage héritage : mêmes dates → hérite du type détecté (non par défaut)
@@ -714,10 +715,6 @@ function computeTypes(rows) {
       const dateMatch = map[k]
       if(dateMatch) r._type = dateMatch
     }
-  })
-  // Samedi sans assignation → Apéro Concert (priorité basse, après héritage)
-  result.forEach(r => {
-    if(r._isDefault && r._type==='Divers' && r._isSat) r._type = 'Apéro Concert'
   })
   return result
 }
