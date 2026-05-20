@@ -1343,6 +1343,10 @@ function renderAdsTab(data, pdv, allData) {
   const selectMap = {}
   ;((allData && Array.isArray(allData) && !allData.error) ? allData : []).forEach(r => { if(r.campaign_id) selectMap[r.campaign_id] = r })
   ;((data && Array.isArray(data) && !data.error) ? data : []).forEach(r => { if(r.campaign_id && !selectMap[r.campaign_id]) selectMap[r.campaign_id] = r })
+  // Toujours inclure ads_30d dans le sélecteur — en mode 'max', data ET allData sont ads_max,
+  // donc les campagnes récentes (absentes de ads_max) ne seraient jamais dans le dropdown.
+  const _ads30dCache = DB.getCache(pdv.id, 'ads_30d') || []
+  ;(Array.isArray(_ads30dCache) ? _ads30dCache : []).forEach(r => { if(r.campaign_id && !selectMap[r.campaign_id]) selectMap[r.campaign_id] = r })
   const sourceForSelect = Object.values(selectMap)
   const yearMonths = {}
   sourceForSelect.forEach(r => {
