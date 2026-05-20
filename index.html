@@ -1065,7 +1065,7 @@ async function loadAds(pdv, force, period) {
       let curl = `${accountId}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&limit=100`
       while(curl) {
         const d = await fetchMeta(curl, pdv.fb_token)
-        campaigns = campaigns.concat(d.data||[])
+        campaigns = campaigns.concat((d.data||[]).map(c => ({...c, _accountId: accountId})))
         curl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
         if(campaigns.length > 1000) break
       }
@@ -1074,14 +1074,22 @@ async function loadAds(pdv, force, period) {
     const allowedPageIds = [pdv.fb_page_id, pdv.filter_page_id].filter(Boolean)
     let allowedCampaignIds = null
     if(allowedPageIds.length > 0) {
+      // Comptes qui appartiennent aussi à d'autres établissements → filtre strict sur ces comptes
+      const allCfg = sheetConfig || DB.cfg
+      const foreignAccountIds = new Set(
+        allCfg.filter(p => p.id !== pdv.id && p.ad_account_id)
+          .flatMap(p => p.ad_account_id.split(',').map(s => s.trim()).filter(Boolean))
+          .filter(id => accountIds.includes(id))
+      )
       const before = campaigns.length
-      if(accountIds.length > 1) {
-        // Plusieurs comptes pub : filtre strict — seules les campagnes avec page_id confirmée passent
-        campaigns = campaigns.filter(c => allowedPageIds.includes(c.promoted_object?.page_id))
-      } else {
-        // Compte unique : filtre souple — les campagnes sans page_id appartiennent à cet établissement
-        campaigns = campaigns.filter(c => !c.promoted_object?.page_id || allowedPageIds.includes(c.promoted_object.page_id))
-      }
+      campaigns = campaigns.filter(c => {
+        if(foreignAccountIds.has(c._accountId)) {
+          // Compte étranger : page_id doit explicitement correspondre
+          return allowedPageIds.includes(c.promoted_object?.page_id)
+        }
+        // Compte propre : campagnes sans page_id conservées
+        return !c.promoted_object?.page_id || allowedPageIds.includes(c.promoted_object.page_id)
+      })
       allowedCampaignIds = new Set(campaigns.map(c => c.id))
       if(before !== campaigns.length) console.log(`[filter] ${pdv.nom} — ${before - campaigns.length} campagne(s) masquée(s) (page non configurée)`)
     }
