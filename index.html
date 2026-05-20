@@ -1699,6 +1699,36 @@ async function saveComparatifEntry(etablissement_id,mois,metriques){
   if(!r.ok) throw new Error(`Supabase ${r.status}`)
 }
 
+// computeRangeMetrics : même logique que computeMonthMetrics mais sans filtre par date_start.
+// Travaille sur les données déjà filtrées par l'API Meta (time_range) et par loadAds (page_id).
+function computeRangeMetrics(data){
+  const rows=computeTypes(data||[])
+  if(!rows.length) return null
+  const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
+  const DUREE_MIN_C={'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5}
+  const BUDGET_CIBLE_C={'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30}
+  const nb_pubs=rows.length
+  const budget_total=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
+  const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
+  const dRows=rows.filter(r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;return d!==null&&(DUREE_MIN_C[r._type]!==undefined||r._type==='Soirée')})
+  const dVert=dRows.filter(r=>{const d=Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000);const ol=objMap[r.objective]||r.objective||'—';let min=DUREE_MIN_C[r._type];if(r._type==='Soirée')min=ol==='Événement'?14:5;return min!==undefined&&d>=min}).length
+  const score_duree=dRows.length>0?dVert/dRows.length:null
+  const getBT=r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;if(r.lifetime_budget)return r.lifetime_budget;if(r.daily_budget&&d)return r.daily_budget*d;return null}
+  const bgMap={}
+  rows.forEach(r=>{if(r._type==='Soirée')return;const cible=BUDGET_CIBLE_C[r._type];if(!cible)return;const key=`${r._type}_${r.date_stop}`;if(!bgMap[key])bgMap[key]={cible,total:0,ids:[]};const bt=getBT(r);if(bt)bgMap[key].total+=bt;bgMap[key].ids.push(r.campaign_id)})
+  const bBadge={}
+  Object.values(bgMap).forEach(g=>{const cls=g.total/g.cible>=0.9?'ok':g.total/g.cible>=0.7?'warn':'bad';g.ids.forEach(id=>{bBadge[id]=cls})})
+  const bRows=rows.filter(r=>{const bt=getBT(r);if(!bt)return false;const ol=objMap[r.objective]||r.objective||'—';if(r._type==='Soirée')return['Événement','Interaction','Trafic'].includes(ol);return BUDGET_CIBLE_C[r._type]!==undefined})
+  const bVert=bRows.filter(r=>{if(r._type==='Soirée'){const bt=getBT(r);const ol=objMap[r.objective]||r.objective||'—';return bt/(ol==='Événement'?100:50)>=0.9}return bBadge[r.campaign_id]==='ok'}).length
+  const score_budget=bRows.length>0?bVert/bRows.length:null
+  const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
+  const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
+  const score_objectif=oRows.length>0?oVert/oRows.length:null
+  const scores=[score_duree,score_budget,score_objectif].filter(s=>s!==null)
+  const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
+  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_global}
+}
+
 let compSortCol='score_global',compSortAsc=false,compCurrentData={}
 let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
@@ -1751,8 +1781,6 @@ async function launchComparatif(){
 }
 
 async function loadComparatifPeriode(selectedMonths){
-  const body=document.getElementById('comp-body')
-  if(!body) return
   const cfg=sheetConfig||DB.cfg
   const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
   _compResults={}
@@ -1761,6 +1789,8 @@ async function loadComparatifPeriode(selectedMonths){
   const since=selectedMonths[0]+'-01'
   const[ly,lm]=selectedMonths[selectedMonths.length-1].split('-').map(Number)
   const until=new Date(ly,lm,0).toISOString().split('T')[0]
+  // Clé Supabase unique pour la période exacte — évite tout mélange avec les clés mensuelles
+  const periodeKey=selectedMonths.join('~')
 
   const periodLabel=selectedMonths.length===1
     ?moisLabel(selectedMonths[0])
@@ -1769,55 +1799,52 @@ async function loadComparatifPeriode(selectedMonths){
   const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
   const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
 
-  body.innerHTML=`
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap">
+  document.getElementById('main').innerHTML=`
+    <div class="topbar">
+      <div>
+        <h1>Comparatif global</h1>
+        <div style="font-size:12px;color:var(--tx2);margin-top:2px">${periodLabel}</div>
+      </div>
       <button class="btn btn-sm" onclick="renderComparatif()">← Changer la période</button>
-      <span style="font-size:14px;font-weight:500">${periodLabel}</span>
     </div>
-    <div class="card" id="comp-table-wrap">
-      <div class="tbl-wrap"><table class="t">
-        <thead><tr>
-          <th>#</th><th class="tal">Établissement</th>
-          ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
-          ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}
-        </tr></thead>
-        <tbody id="comp-tbody">
-          ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
-        </tbody>
-      </table></div>
+    <div id="comp-body" style="padding:1.5rem">
+      <div class="card" id="comp-table-wrap">
+        <div class="tbl-wrap"><table class="t">
+          <thead><tr>
+            <th>#</th><th class="tal">Établissement</th>
+            ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
+            ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}
+          </tr></thead>
+          <tbody id="comp-tbody">
+            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
     </div>`
 
-  // Charger depuis Supabase tous les mois sélectionnés en une requête
+  // Vérifier Supabase pour la période exacte (clé periode complète)
   let supaByPdv={}
   try{
-    const rows=await supabaseFetch(`comparatif_mensuel?mois=in.(${selectedMonths.join(',')})&select=*`)||[]
-    rows.forEach(r=>{if(!supaByPdv[r.etablissement_id])supaByPdv[r.etablissement_id]={};supaByPdv[r.etablissement_id][r.mois]=r.metriques})
+    const rows=await supabaseFetch(`comparatif_mensuel?mois=eq.${periodeKey}&select=*`)||[]
+    rows.forEach(r=>{supaByPdv[r.etablissement_id]=r.metriques})
   }catch(e){console.warn('Supabase read:',e.message)}
 
-  // Traitement séquentiel — chaque ligne se met à jour dès que ses données arrivent
   for(let i=0;i<pdvs.length;i++){
     const pdv=pdvs[i]
     try{
-      const missingMonths=selectedMonths.filter(m=>!supaByPdv[pdv.id]?.[m])
-      let rangeData=null
-      if(missingMonths.length>0){
-        // Un seul appel Meta couvre tous les mois manquants
-        rangeData=await loadAds(pdv,false,`range:${since}:${until}`)
-      }
-      const monthMetrics=selectedMonths.map(mois=>{
-        if(supaByPdv[pdv.id]?.[mois]) return supaByPdv[pdv.id][mois]
+      let metriques=supaByPdv[pdv.id]||null
+      if(!metriques){
+        // Un seul appel Meta pour toute la plage — loadAds applique déjà le filtre page_id
+        const rangeData=await loadAds(pdv,false,`range:${since}:${until}`)
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
-          const m=computeMonthMetrics(rangeData,mois)
-          if(m&&currentRole==='admin') saveComparatifEntry(pdv.id,mois,m).catch(()=>{})
-          return m
+          metriques=computeRangeMetrics(rangeData)
+          if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
         }
-        return null
-      })
-      const agg=aggregateMonthMetrics(monthMetrics)
+      }
       const tr=document.getElementById(`cr-${pdv.id}`)
-      if(agg){
-        _compResults[pdv.id]=agg
-        if(tr) tr.outerHTML=compRowHtml(i,pdv,agg)
+      if(metriques){
+        _compResults[pdv.id]=metriques
+        if(tr) tr.outerHTML=compRowHtml(i,pdv,metriques)
       } else {
         if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
       }
@@ -1827,21 +1854,6 @@ async function loadComparatifPeriode(selectedMonths){
       if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
-}
-
-function aggregateMonthMetrics(list){
-  const valid=list.filter(m=>m!==null)
-  if(!valid.length) return null
-  const nb_pubs=valid.reduce((a,m)=>a+m.nb_pubs,0)
-  const budget_total=valid.reduce((a,m)=>a+m.budget_total,0)
-  const reach_total=valid.reduce((a,m)=>a+m.reach_total,0)
-  const avg=arr=>{const v=arr.filter(x=>x!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null}
-  const score_duree=avg(valid.map(m=>m.score_duree))
-  const score_budget=avg(valid.map(m=>m.score_budget))
-  const score_objectif=avg(valid.map(m=>m.score_objectif))
-  const scores=[score_duree,score_budget,score_objectif].filter(s=>s!==null)
-  const score_global=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null
-  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_global}
 }
 
 function compRowHtml(rank,pdv,m){
