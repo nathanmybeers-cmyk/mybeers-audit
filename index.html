@@ -238,6 +238,7 @@ async function exportPDF(pdvId) {
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   let periodLabel = '30 derniers jours'
   if(currentPeriod==='max') periodLabel='Toute la période'
+  else if(currentPeriod.startsWith('range:')){const p=currentPeriod.split(':');periodLabel=`${p[1]} → ${p[2]}`}
   else if(currentPeriod!=='30d') {
     if(currentPeriod.startsWith('year-')) periodLabel = currentPeriod.replace('year-','')+' — Toute l\'année'
     else { const [fy,fm]=currentPeriod.split('-').map(Number); periodLabel=`${monthNames[fm]} ${fy}` }
@@ -1144,9 +1145,10 @@ async function loadAds(pdv, force, period) {
     const sinceDate = new Date(); sinceDate.setMonth(sinceDate.getMonth() - 36)
     const since = sinceDate.toISOString().split('T')[0]
     const until = new Date().toISOString().split('T')[0]
-    const insightParams = period==='max'
-      ? `time_range={"since":"${since}","until":"${until}"}`
-      : `date_preset=last_30d`
+    let insightParams
+    if(period==='max') insightParams=`time_range={"since":"${since}","until":"${until}"}`
+    else if(period&&period.startsWith('range:')){const p=period.split(':');insightParams=`time_range={"since":"${p[1]}","until":"${p[2]}"}`}
+    else insightParams=`date_preset=last_30d`
     let insights = []
     for (const accountId of accountIds) {
       let iurl = `${accountId}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&${insightParams}&level=campaign&limit=50`
@@ -1204,6 +1206,7 @@ async function loadAds(pdv, force, period) {
 let charts = {}
 let currentPeriod = '30d'
 let currentTypeFilter = null
+let _rangePdvId = null
 
 async function renderDash(pdvId, force, period) {
   const pdv = (sheetConfig || DB.cfg).find(x=>x.id===pdvId)
@@ -1223,11 +1226,13 @@ async function renderDash(pdvId, force, period) {
     </div>
     <div id="dash-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement...</div></div>`
 
-  // Charger adsAll uniquement si période max/personnalisée, sinon depuis le cache uniquement
-  const needsAll = currentPeriod !== '30d'
-  const cachedAll = DB.getCache(pdvId, 'ads_max')
+  const isRangePeriod = currentPeriod.startsWith('range:')
+  // Charger ads_30d en parallèle si absent du cache — garantit que les mois récents
+  // apparaissent dans le sélecteur même si l'utilisateur n'a jamais cliqué "30 derniers jours"
+  const p30d = !isRangePeriod && !DB.getCache(pdvId,'ads_30d') ? loadAds(pdv,false,'30d') : null
   const ads = await loadAds(pdv, force, currentPeriod)
-  const adsAll = needsAll ? await loadAds(pdv, false, 'max') : (cachedAll || ads)
+  if(p30d) await p30d
+  const adsAll = isRangePeriod ? ads : (currentPeriod!=='30d' ? await loadAds(pdv,false,'max') : (DB.getCache(pdvId,'ads_max')||ads))
 
   const cEl = document.getElementById('cache-ts')
   if(cEl){ try{ const c=DB.getCache(pdvId,'ads_'+currentPeriod); if(c) cEl.textContent=`Mis à jour le ${new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`))||'{}').ts||0 > 0 ? new Date(JSON.parse(localStorage.getItem(`rsf_c_${pdvId}_ads_${currentPeriod}`)).ts).toLocaleDateString('fr-FR') : ''}` }catch(e){} }
@@ -1315,6 +1320,7 @@ function getFiltered(data30d, dataAll) {
   const dAll = (dataAll && Array.isArray(dataAll)) ? dataAll : []
   if(currentPeriod==='30d') return d30
   if(currentPeriod==='max') return dAll
+  if(currentPeriod.startsWith('range:')) return dAll
   if(currentPeriod.startsWith('year-')) {
     const fy = parseInt(currentPeriod.replace('year-',''))
     const yStart = new Date(fy, 0, 1), yEnd = new Date(fy, 11, 31)
@@ -1338,56 +1344,23 @@ function renderAdsTab(data, pdv, allData) {
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  // Fusionner ads_max et ads_30d pour le sélecteur : ads_30d couvre les campagnes récentes
-  // absentes de ads_max (cache stale ou campagnes créées après le dernier fetch max)
-  const selectMap = {}
-  ;((allData && Array.isArray(allData) && !allData.error) ? allData : []).forEach(r => { if(r.campaign_id) selectMap[r.campaign_id] = r })
-  ;((data && Array.isArray(data) && !data.error) ? data : []).forEach(r => { if(r.campaign_id && !selectMap[r.campaign_id]) selectMap[r.campaign_id] = r })
-  // Toujours inclure ads_30d dans le sélecteur — en mode 'max', data ET allData sont ads_max,
-  // donc les campagnes récentes (absentes de ads_max) ne seraient jamais dans le dropdown.
-  const _ads30dCache = DB.getCache(pdv.id, 'ads_30d') || []
-  ;(Array.isArray(_ads30dCache) ? _ads30dCache : []).forEach(r => { if(r.campaign_id && !selectMap[r.campaign_id]) selectMap[r.campaign_id] = r })
-  const sourceForSelect = Object.values(selectMap)
-  const yearMonths = {}
-  sourceForSelect.forEach(r => {
-    if(!r.date_start) return
-    const end = campEnd(r)
-    let cur = new Date(new Date(r.date_start).getFullYear(), new Date(r.date_start).getMonth(), 1)
-    const endYM = new Date(end.getFullYear(), end.getMonth(), 1)
-    while(cur <= endYM) {
-      const y=cur.getFullYear(), m=cur.getMonth()
-      if(!yearMonths[y]) yearMonths[y]=new Set()
-      yearMonths[y].add(m)
-      cur.setMonth(cur.getMonth()+1)
-    }
-  })
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
-  const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
-    <option value="year-${y}">${y} — Toute l'année</option>
-    ${[...yearMonths[y]].sort((a,b)=>b-a).map(m=>`<option value="${y}-${m}">&nbsp;&nbsp;&nbsp;${monthNames[m]}</option>`).join('')}
-  `).join('')
-
-  const isCustom = currentPeriod!=='30d' && currentPeriod!=='max'
+  const isRange = currentPeriod.startsWith('range:')
+  const isCustom = !['30d','max'].includes(currentPeriod) && !isRange
   let customLabel = 'Personnalisé'
-  if(isCustom && currentPeriod.startsWith('year-')) customLabel = currentPeriod.replace('year-','')+' — Toute l\'année'
-  else if(isCustom && currentPeriod.includes('-')){ const [fy,fm]=currentPeriod.split('-').map(Number); customLabel=`${monthNames[fm]} ${fy}` }
+  if(isRange){const p=currentPeriod.split(':');const fmt=d=>{const[y,m,day]=d.split('-');return`${day}/${m}/${y}`};customLabel=`${fmt(p[1])} → ${fmt(p[2])}`}
+  else if(isCustom&&currentPeriod.startsWith('year-'))customLabel=currentPeriod.replace('year-','')+' — Toute l\'année'
+  else if(isCustom&&currentPeriod.includes('-')){const[fy,fm]=currentPeriod.split('-').map(Number);customLabel=`${monthNames[fm]} ${fy}`}
 
   let periodLabel2 = '30 derniers jours'
   if(currentPeriod==='max') periodLabel2='Toute la période'
-  else if(isCustom) periodLabel2=customLabel
+  else if(isCustom||isRange) periodLabel2=customLabel
 
   const periodSel = `<div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--tx2)">Période :</span>
     <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','30d')">30 derniers jours</button>
     <button class="btn btn-sm${currentPeriod==='max'?' btn-primary':''}" onclick="changePeriod('${pdv.id}','max')">Toute la période</button>
-    <div style="position:relative;display:inline-block">
-      <button class="btn btn-sm${isCustom?' btn-primary':''}" onclick="document.getElementById('custom-sel-${pdv.id}').style.display=document.getElementById('custom-sel-${pdv.id}').style.display==='none'?'block':'none'">${isCustom?customLabel:'Personnalisé'} ▾</button>
-      <div id="custom-sel-${pdv.id}" style="display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--bg2);border:0.5px solid var(--bd2);border-radius:var(--r);padding:4px 0;min-width:180px;margin-top:4px">
-        <select size="${Object.values(yearMonths).reduce((a,s)=>a+s.size,0) + Object.keys(yearMonths).length}" style="border:none;background:transparent;width:100%;font-size:12px;outline:none;padding:0 8px" onchange="changePeriod('${pdv.id}',this.value);document.getElementById('custom-sel-${pdv.id}').style.display='none'">
-          ${yearOpts}
-        </select>
-      </div>
-    </div>
+    <button class="btn btn-sm${(isCustom||isRange)?' btn-primary':''}" onclick="openDateRangePicker('${pdv.id}')">${(isCustom||isRange)?customLabel:'Personnalisé'} ▾</button>
   </div>`
 
   const filtered = getFiltered(data, allData||data)
@@ -1845,7 +1818,7 @@ function filterByType(pdvId, type) {
   const pdv = (sheetConfig || DB.cfg).find(x => x.id === pdvId)
   if (!pdv) return
   const data = DB.getCache(pdvId, 'ads_' + currentPeriod)
-  const allData = DB.getCache(pdvId, 'ads_max')
+  const allData = currentPeriod.startsWith('range:') ? data : DB.getCache(pdvId, 'ads_max')
   const tab = document.getElementById('t-ads')
   if (tab) tab.innerHTML = renderAdsTab(data, pdv, allData)
   setTimeout(() => {
@@ -1854,8 +1827,55 @@ function filterByType(pdvId, type) {
   }, 50)
 }
 
+// ── DATE RANGE PICKER ──────────────────────────────────────────────────────
+function openDateRangePicker(pdvId) {
+  _rangePdvId = pdvId
+  if(currentPeriod.startsWith('range:')) {
+    const p=currentPeriod.split(':')
+    document.getElementById('rp-start').value=p[1]
+    document.getElementById('rp-end').value=p[2]
+  } else {
+    const today=new Date(); const start=new Date(today); start.setMonth(start.getMonth()-3)
+    document.getElementById('rp-start').value=start.toISOString().split('T')[0]
+    document.getElementById('rp-end').value=today.toISOString().split('T')[0]
+  }
+  document.getElementById('rp-overlay').style.display='flex'
+}
+function closeDateRangePicker() {
+  document.getElementById('rp-overlay').style.display='none'
+}
+function applyDateRange() {
+  const s=document.getElementById('rp-start').value
+  const e=document.getElementById('rp-end').value
+  if(!s||!e){alert('Veuillez sélectionner une date de début et une date de fin.');return}
+  if(s>e){alert('La date de début doit être avant la date de fin.');return}
+  closeDateRangePicker()
+  changePeriod(_rangePdvId,`range:${s}:${e}`)
+}
+
 // ── INIT ───────────────────────────────────────────────────────────────────
 buildSidebar(null)
 </script>
+
+<div id="rp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center" onclick="if(event.target===this)closeDateRangePicker()">
+  <div style="background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:1.75rem;width:320px;display:flex;flex-direction:column;gap:1.25rem;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+    <div style="font-size:15px;font-weight:600;color:var(--tx)">Choisir une période</div>
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div>
+        <label>Date de début</label>
+        <input type="date" id="rp-start">
+      </div>
+      <div>
+        <label>Date de fin</label>
+        <input type="date" id="rp-end">
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--tx3);margin:0">Les données sont récupérées en direct depuis Meta pour la période sélectionnée (max. 37 mois).</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeDateRangePicker()">Annuler</button>
+      <button class="btn btn-sm btn-primary" onclick="applyDateRange()">Valider</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
