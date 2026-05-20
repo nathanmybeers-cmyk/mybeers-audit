@@ -1140,7 +1140,9 @@ async function loadAds(pdv, force, period) {
     // Récupérer les insights de tous les comptes publicitaires
     // Pour "max" on utilise un time_range explicite plutôt que date_preset=maximum
     // car Meta peut omettre des campagnes récentes avec maximum sur certains comptes
-    const since = '2018-01-01'
+    // Meta limite à 37 mois — on prend 36 mois pour rester dans la marge
+    const sinceDate = new Date(); sinceDate.setMonth(sinceDate.getMonth() - 36)
+    const since = sinceDate.toISOString().split('T')[0]
     const until = new Date().toISOString().split('T')[0]
     const insightParams = period==='max'
       ? `time_range={"since":"${since}","until":"${until}"}`
