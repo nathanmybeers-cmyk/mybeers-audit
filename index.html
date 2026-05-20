@@ -1075,7 +1075,13 @@ async function loadAds(pdv, force, period) {
     let allowedCampaignIds = null
     if(allowedPageIds.length > 0) {
       const before = campaigns.length
-      campaigns = campaigns.filter(c => allowedPageIds.includes(c.promoted_object?.page_id))
+      if(accountIds.length > 1) {
+        // Plusieurs comptes pub : filtre strict — seules les campagnes avec page_id confirmée passent
+        campaigns = campaigns.filter(c => allowedPageIds.includes(c.promoted_object?.page_id))
+      } else {
+        // Compte unique : filtre souple — les campagnes sans page_id appartiennent à cet établissement
+        campaigns = campaigns.filter(c => !c.promoted_object?.page_id || allowedPageIds.includes(c.promoted_object.page_id))
+      }
       allowedCampaignIds = new Set(campaigns.map(c => c.id))
       if(before !== campaigns.length) console.log(`[filter] ${pdv.nom} — ${before - campaigns.length} campagne(s) masquée(s) (page non configurée)`)
     }
