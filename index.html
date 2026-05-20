@@ -1647,17 +1647,6 @@ function drawAdsChart(rows) {
 // ── COMPARATIF GLOBAL ──────────────────────────────────────────────────────
 const MOIS_NOMS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 
-function getCompletedMonths(n=12){
-  const months=[],now=new Date()
-  let y=now.getFullYear(),m=now.getMonth()-1
-  if(m<0){m=11;y--}
-  for(let i=0;i<n;i++){
-    months.push(`${y}-${String(m+1).padStart(2,'0')}`)
-    m--;if(m<0){m=11;y--}
-  }
-  return months
-}
-
 function moisLabel(mois){
   const [y,m]=mois.split('-').map(Number)
   return `${MOIS_NOMS[m-1]} ${y}`
@@ -1710,100 +1699,186 @@ async function saveComparatifEntry(etablissement_id,mois,metriques){
   if(!r.ok) throw new Error(`Supabase ${r.status}`)
 }
 
-let currentComparatifMois=null
 let compSortCol='score_global',compSortAsc=false,compCurrentData={}
+let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
-async function renderComparatif(){
-  const months=getCompletedMonths(12)
-  if(!currentComparatifMois||!months.includes(currentComparatifMois)) currentComparatifMois=months[0]
+function renderComparatif(){
+  const now=new Date(),cy=now.getFullYear()
   document.getElementById('main').innerHTML=`
     <div class="topbar"><h1>Comparatif global</h1></div>
-    <div id="comp-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Chargement…</div></div>`
-  await loadComparatifMonth(currentComparatifMois)
+    <div id="comp-body" style="display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem">
+      <div class="card" style="max-width:460px;width:100%;display:flex;flex-direction:column;gap:1.5rem">
+        <div style="font-size:15px;font-weight:600">Sélectionner votre période</div>
+        <div>
+          <label>Année</label>
+          <div id="comp-year-sel" style="display:flex;gap:6px;margin-top:6px">
+            ${[cy,cy-1,cy-2].map(y=>`<button class="btn btn-sm" id="cy-${y}" onclick="compSelectYear(${y})">${y}</button>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label>Mois <span style="color:var(--tx3);font-weight:400">— sélection multiple</span></label>
+          <div id="comp-month-sel" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+        </div>
+        <button class="btn btn-primary" onclick="launchComparatif()">Lancer le calcul</button>
+      </div>
+    </div>`
+  compSelectYear(cy-1)
 }
 
-async function loadComparatifMonth(mois, forceAds=false){
-  currentComparatifMois=mois
+function compSelectYear(year){
+  _compYear=year
+  _compSelectedMonths.clear()
+  const now=new Date()
+  document.querySelectorAll('[id^="cy-"]').forEach(b=>{b.classList.toggle('btn-primary',parseInt(b.id.replace('cy-',''))===year)})
+  const maxM=year<now.getFullYear()?12:now.getMonth()
+  const sel=document.getElementById('comp-month-sel')
+  if(!sel) return
+  sel.innerHTML=MOIS_NOMS.slice(0,maxM).map((nom,i)=>{
+    const m=`${year}-${String(i+1).padStart(2,'0')}`
+    return `<button class="btn btn-sm" id="cm-${m}" onclick="compToggleMonth('${m}')">${nom.slice(0,3)}</button>`
+  }).join('')
+}
+
+function compToggleMonth(mois){
+  const btn=document.getElementById(`cm-${mois}`)
+  if(_compSelectedMonths.has(mois)){_compSelectedMonths.delete(mois);if(btn)btn.classList.remove('btn-primary')}
+  else{_compSelectedMonths.add(mois);if(btn)btn.classList.add('btn-primary')}
+}
+
+async function launchComparatif(){
+  if(!_compSelectedMonths.size){alert('Veuillez sélectionner au moins un mois.');return}
+  await loadComparatifPeriode([..._compSelectedMonths].sort())
+}
+
+async function loadComparatifPeriode(selectedMonths){
   const body=document.getElementById('comp-body')
   if(!body) return
   const cfg=sheetConfig||DB.cfg
-  const months=getCompletedMonths(12)
-  const monthSel=`<div style="display:flex;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap">${months.map(m=>`<button class="btn btn-sm${m===mois?' btn-primary':''}" onclick="loadComparatifMonth('${m}')">${moisLabel(m)}</button>`).join('')}</div>`
-  body.innerHTML=monthSel+`<div style="padding:1rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Vérification Supabase…</div>`
+  const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
+  _compResults={}
+  compCurrentData={selectedMonths,cfg}
 
-  let supaRows=[]
-  try{supaRows=await supabaseFetch(`comparatif_mensuel?mois=eq.${mois}&select=*`)||[]}catch(e){supaRows=[]}
-  const supaMap={}
-  supaRows.forEach(r=>{supaMap[r.etablissement_id]=r.metriques})
+  const since=selectedMonths[0]+'-01'
+  const[ly,lm]=selectedMonths[selectedMonths.length-1].split('-').map(Number)
+  const until=new Date(ly,lm,0).toISOString().split('T')[0]
 
-  const missing=cfg.filter(p=>p.ad_account_id&&p.fb_token&&!supaMap[p.id])
-  if(currentRole==='admin'&&missing.length>0){
-    for(let i=0;i<missing.length;i++){
-      const pdv=missing[i]
-      body.innerHTML=monthSel+`<div style="padding:1rem;text-align:center;color:var(--tx2)"><span class="spin"></span> Calcul en cours… ${i+1}/${missing.length} — ${pdv.nom.replace('My Beers ','')}</div>`
-      try{
-        let adsMax = forceAds ? null : DB.getCache(pdv.id,'ads_max')
-        if(!adsMax||adsMax.error) adsMax=await loadAds(pdv, forceAds, 'max')
-        if(!adsMax||adsMax.error||!Array.isArray(adsMax)){console.warn(`Comparatif ${pdv.nom}: pas de données ads_max`);continue}
-        const metriques=computeMonthMetrics(adsMax,mois)
-        if(!metriques){console.warn(`Comparatif ${pdv.nom}: aucune pub en ${mois}`);continue}
-        supaMap[pdv.id]=metriques
-        await saveComparatifEntry(pdv.id,mois,metriques)
-      }catch(e){console.warn(`Comparatif ${pdv.nom}:`,e.message)}
+  const periodLabel=selectedMonths.length===1
+    ?moisLabel(selectedMonths[0])
+    :`${moisLabel(selectedMonths[0])} → ${moisLabel(selectedMonths[selectedMonths.length-1])}`
+
+  const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
+  const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
+
+  body.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="renderComparatif()">← Changer la période</button>
+      <span style="font-size:14px;font-weight:500">${periodLabel}</span>
+    </div>
+    <div class="card" id="comp-table-wrap">
+      <div class="tbl-wrap"><table class="t">
+        <thead><tr>
+          <th>#</th><th class="tal">Établissement</th>
+          ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
+          ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}
+        </tr></thead>
+        <tbody id="comp-tbody">
+          ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`
+
+  // Charger depuis Supabase tous les mois sélectionnés en une requête
+  let supaByPdv={}
+  try{
+    const rows=await supabaseFetch(`comparatif_mensuel?mois=in.(${selectedMonths.join(',')})&select=*`)||[]
+    rows.forEach(r=>{if(!supaByPdv[r.etablissement_id])supaByPdv[r.etablissement_id]={};supaByPdv[r.etablissement_id][r.mois]=r.metriques})
+  }catch(e){console.warn('Supabase read:',e.message)}
+
+  // Traitement séquentiel — chaque ligne se met à jour dès que ses données arrivent
+  for(let i=0;i<pdvs.length;i++){
+    const pdv=pdvs[i]
+    try{
+      const missingMonths=selectedMonths.filter(m=>!supaByPdv[pdv.id]?.[m])
+      let rangeData=null
+      if(missingMonths.length>0){
+        // Un seul appel Meta couvre tous les mois manquants
+        rangeData=await loadAds(pdv,false,`range:${since}:${until}`)
+      }
+      const monthMetrics=selectedMonths.map(mois=>{
+        if(supaByPdv[pdv.id]?.[mois]) return supaByPdv[pdv.id][mois]
+        if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
+          const m=computeMonthMetrics(rangeData,mois)
+          if(m&&currentRole==='admin') saveComparatifEntry(pdv.id,mois,m).catch(()=>{})
+          return m
+        }
+        return null
+      })
+      const agg=aggregateMonthMetrics(monthMetrics)
+      const tr=document.getElementById(`cr-${pdv.id}`)
+      if(agg){
+        _compResults[pdv.id]=agg
+        if(tr) tr.outerHTML=compRowHtml(i,pdv,agg)
+      } else {
+        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
+      }
+    }catch(e){
+      console.warn(`Comparatif ${pdv.nom}:`,e.message)
+      const tr=document.getElementById(`cr-${pdv.id}`)
+      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
-  body.innerHTML=monthSel+renderComparatifTable(mois,supaMap,cfg)
 }
 
-async function recalculerComparatif(mois){
-  if(currentRole!=='admin') return
-  try{await supabaseFetch(`comparatif_mensuel?mois=eq.${mois}`,{method:'DELETE'})}catch(e){}
-  await loadComparatifMonth(mois, true)
+function aggregateMonthMetrics(list){
+  const valid=list.filter(m=>m!==null)
+  if(!valid.length) return null
+  const nb_pubs=valid.reduce((a,m)=>a+m.nb_pubs,0)
+  const budget_total=valid.reduce((a,m)=>a+m.budget_total,0)
+  const reach_total=valid.reduce((a,m)=>a+m.reach_total,0)
+  const avg=arr=>{const v=arr.filter(x=>x!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null}
+  const score_duree=avg(valid.map(m=>m.score_duree))
+  const score_budget=avg(valid.map(m=>m.score_budget))
+  const score_objectif=avg(valid.map(m=>m.score_objectif))
+  const scores=[score_duree,score_budget,score_objectif].filter(s=>s!==null)
+  const score_global=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null
+  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_global}
 }
 
-async function calculerManquants(mois){
-  if(currentRole!=='admin') return
-  await loadComparatifMonth(mois)
-}
-
-function renderComparatifTable(mois,supaMap,cfg){
-  compCurrentData={mois,supaMap,cfg}
-  const entries=cfg.filter(p=>supaMap[p.id]).map(p=>({pdv:p,m:supaMap[p.id]}))
-  const noData=cfg.filter(p=>p.ad_account_id&&p.fb_token&&!supaMap[p.id])
-  if(!entries.length) return `<div class="card"><p class="empty">Aucune donnée pour ${moisLabel(mois)}.</p>${currentRole==='admin'?`<div style="margin-top:12px"><button class="btn btn-primary" onclick="recalculerComparatif('${mois}')">Calculer</button></div>`:''}</div>`
+function compRowHtml(rank,pdv,m){
   const sc=s=>s===null?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
   const sp=s=>s===null?'—':`${Math.round(s*100)}%`
   const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
-  const sorted=[...entries].sort((a,b)=>{const va=a.m[compSortCol]??-1,vb=b.m[compSortCol]??-1;return compSortAsc?va-vb:vb-va})
-  const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
-  const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
-  const trows=sorted.map((e,i)=>{const m=e.m;return `<tr>
-    <td style="font-weight:600;color:var(--tx3)">${i+1}</td>
-    <td class="tal"><strong>${e.pdv.nom.replace('My Beers ','')}</strong></td>
+  return`<tr id="cr-${pdv.id}">
+    <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
+    <td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
     <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
     <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
     <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
     <td><span style="font-size:15px;font-weight:700;color:${sc(m.score_global)}">${sp(m.score_global)}</span></td>
-  </tr>`}).join('')
-  return `<div class="card" id="comp-table-wrap">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-      <div class="ct" style="margin:0">${moisLabel(mois)} — ${sorted.length} établissement${sorted.length>1?'s':''}</div>
-      ${currentRole==='admin'?`<button class="btn" onclick="recalculerComparatif('${mois}')">Recalculer</button>`:''}
-    </div>
-    <div class="tbl-wrap"><table class="t">
-      <thead><tr><th>#</th><th class="tal">Établissement</th>${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}</tr></thead>
-      <tbody>${trows}</tbody>
-    </table></div>
-    ${noData.length&&currentRole==='admin'?`<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><p style="font-size:11px;color:var(--tx3);margin:0">Non calculés : ${noData.map(p=>p.nom.replace('My Beers ','')).join(', ')}</p><button class="btn btn-sm" onclick="calculerManquants('${mois}')">Calculer les manquants</button></div>`:noData.length?`<p style="font-size:11px;color:var(--tx3);margin-top:8px">Non disponibles : ${noData.map(p=>p.nom.replace('My Beers ','')).join(', ')}</p>`:''}
-  </div>`
+  </tr>`
 }
 
 function sortComparatif(col){
   if(compSortCol===col) compSortAsc=!compSortAsc
   else{compSortCol=col;compSortAsc=false}
+  const tbody=document.getElementById('comp-tbody')
+  if(!tbody||!compCurrentData.cfg) return
+  const pdvs=compCurrentData.cfg.filter(p=>p.ad_account_id&&p.fb_token)
+  const withData=pdvs.filter(p=>_compResults[p.id])
+  const noData=pdvs.filter(p=>!_compResults[p.id])
+  const sorted=[...withData].sort((a,b)=>{
+    const va=_compResults[a.id][col]??-1,vb=_compResults[b.id][col]??-1
+    return compSortAsc?va-vb:vb-va
+  })
+  const ordered=[...sorted,...noData]
+  ordered.forEach((pdv,i)=>{const tr=document.getElementById(`cr-${pdv.id}`);if(tr){const c=tr.firstElementChild;if(c)c.textContent=i+1}})
+  const frag=document.createDocumentFragment()
+  ordered.forEach(pdv=>{const tr=document.getElementById(`cr-${pdv.id}`);if(tr)frag.appendChild(tr)})
+  tbody.appendChild(frag)
+  // Mettre à jour les flèches de tri
   const wrap=document.getElementById('comp-table-wrap')
-  if(wrap&&compCurrentData.supaMap) wrap.outerHTML=renderComparatifTable(compCurrentData.mois,compCurrentData.supaMap,compCurrentData.cfg)
+  if(wrap){wrap.querySelectorAll('th[onclick]').forEach(th=>{const c=th.getAttribute('onclick').match(/sortComparatif\('(.+?)'\)/)?.[1];if(c){const lbl=th.textContent.replace(/ [↑↓]$/,'');th.textContent=lbl+(c===col?(compSortAsc?' ↑':' ↓'):'')}})}
 }
 
 // ── CHANGE PERIOD ──────────────────────────────────────────────────────────
