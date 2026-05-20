@@ -1780,7 +1780,17 @@ async function launchComparatif(){
   await loadComparatifPeriode([..._compSelectedMonths].sort())
 }
 
-async function loadComparatifPeriode(selectedMonths){
+async function recalculerComparatifPeriode(){
+  if(currentRole!=='admin') return
+  const months=compCurrentData.selectedMonths
+  if(!months||!months.length) return
+  // Supprimer les entrées Supabase pour cette période
+  try{await supabaseFetch(`comparatif_mensuel?mois=eq.${months.join('~')}`,{method:'DELETE'})}catch(e){console.warn('Supabase delete:',e.message)}
+  // force=true vide aussi le cache localStorage — données fraîches depuis Meta
+  await loadComparatifPeriode(months, true)
+}
+
+async function loadComparatifPeriode(selectedMonths, force=false){
   const cfg=sheetConfig||DB.cfg
   const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
   _compResults={}
@@ -1789,7 +1799,6 @@ async function loadComparatifPeriode(selectedMonths){
   const since=selectedMonths[0]+'-01'
   const[ly,lm]=selectedMonths[selectedMonths.length-1].split('-').map(Number)
   const until=new Date(ly,lm,0).toISOString().split('T')[0]
-  // Clé Supabase unique pour la période exacte — évite tout mélange avec les clés mensuelles
   const periodeKey=selectedMonths.join('~')
 
   const periodLabel=selectedMonths.length===1
@@ -1805,7 +1814,10 @@ async function loadComparatifPeriode(selectedMonths){
         <h1>Comparatif global</h1>
         <div style="font-size:12px;color:var(--tx2);margin-top:2px">${periodLabel}</div>
       </div>
-      <button class="btn btn-sm" onclick="renderComparatif()">← Changer la période</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${currentRole==='admin'?`<button class="btn btn-sm" onclick="recalculerComparatifPeriode()">Recalculer</button>`:''}
+        <button class="btn btn-sm" onclick="renderComparatif()">← Changer la période</button>
+      </div>
     </div>
     <div id="comp-body" style="padding:1.5rem">
       <div class="card" id="comp-table-wrap">
@@ -1822,20 +1834,22 @@ async function loadComparatifPeriode(selectedMonths){
       </div>
     </div>`
 
-  // Vérifier Supabase pour la période exacte (clé periode complète)
+  // Si force=true, on ne lit pas Supabase (données déjà supprimées par recalculer)
   let supaByPdv={}
-  try{
-    const rows=await supabaseFetch(`comparatif_mensuel?mois=eq.${periodeKey}&select=*`)||[]
-    rows.forEach(r=>{supaByPdv[r.etablissement_id]=r.metriques})
-  }catch(e){console.warn('Supabase read:',e.message)}
+  if(!force){
+    try{
+      const rows=await supabaseFetch(`comparatif_mensuel?mois=eq.${periodeKey}&select=*`)||[]
+      rows.forEach(r=>{supaByPdv[r.etablissement_id]=r.metriques})
+    }catch(e){console.warn('Supabase read:',e.message)}
+  }
 
   for(let i=0;i<pdvs.length;i++){
     const pdv=pdvs[i]
     try{
       let metriques=supaByPdv[pdv.id]||null
       if(!metriques){
-        // Un seul appel Meta pour toute la plage — loadAds applique déjà le filtre page_id
-        const rangeData=await loadAds(pdv,false,`range:${since}:${until}`)
+        // force=true : contourne aussi le cache localStorage pour des données fraîches
+        const rangeData=await loadAds(pdv,force,`range:${since}:${until}`)
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
           metriques=computeRangeMetrics(rangeData)
           if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
