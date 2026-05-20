@@ -1295,17 +1295,26 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
 }
 
 // ── FILTERING ──────────────────────────────────────────────────────────────
+function campEnd(r) {
+  // Pour une campagne sans date_stop, plafonne à date_start + 366 jours (max aujourd'hui)
+  // Évite que les vieilles campagnes sans fin remontent sur des mois récents
+  if(r.date_stop) return new Date(r.date_stop)
+  const cap = new Date(r.date_start); cap.setDate(cap.getDate() + 366)
+  return cap < new Date() ? cap : new Date()
+}
 function getFiltered(data30d, dataAll) {
   if(!dataAll || !Array.isArray(dataAll)) return []
   if(currentPeriod==='30d') return (data30d && Array.isArray(data30d) && !data30d.error) ? data30d : []
   if(currentPeriod==='max') return dataAll
   if(currentPeriod.startsWith('year-')) {
     const fy = parseInt(currentPeriod.replace('year-',''))
-    return dataAll.filter(r => r.date_start && new Date(r.date_start).getFullYear()===fy)
+    const yStart = new Date(fy, 0, 1), yEnd = new Date(fy, 11, 31)
+    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= yEnd && campEnd(r) >= yStart })
   }
   if(currentPeriod.includes('-')) {
     const [fy,fm] = currentPeriod.split('-').map(Number)
-    return dataAll.filter(r => { if(!r.date_start) return false; const d=new Date(r.date_start); return d.getFullYear()===fy && d.getMonth()===fm })
+    const mStart = new Date(fy, fm, 1), mEnd = new Date(fy, fm+1, 0)
+    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= mEnd && campEnd(r) >= mStart })
   }
   return dataAll
 }
@@ -1320,9 +1329,15 @@ function renderAdsTab(data, pdv, allData) {
   const yearMonths = {}
   sourceForSelect.forEach(r => {
     if(!r.date_start) return
-    const d=new Date(r.date_start); const y=d.getFullYear(); const m=d.getMonth()
-    if(!yearMonths[y]) yearMonths[y]=new Set()
-    yearMonths[y].add(m)
+    const end = campEnd(r)
+    let cur = new Date(new Date(r.date_start).getFullYear(), new Date(r.date_start).getMonth(), 1)
+    const endYM = new Date(end.getFullYear(), end.getMonth(), 1)
+    while(cur <= endYM) {
+      const y=cur.getFullYear(), m=cur.getMonth()
+      if(!yearMonths[y]) yearMonths[y]=new Set()
+      yearMonths[y].add(m)
+      cur.setMonth(cur.getMonth()+1)
+    }
   })
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
   const yearOpts = Object.keys(yearMonths).sort((a,b)=>b-a).map(y=>`
