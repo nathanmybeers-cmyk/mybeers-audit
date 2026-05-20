@@ -1138,10 +1138,16 @@ async function loadAds(pdv, force, period) {
     campaigns.forEach(c=>{ campMap[c.id] = c })
 
     // Récupérer les insights de tous les comptes publicitaires
-    const preset = period==='max' ? 'maximum' : 'last_30d'
+    // Pour "max" on utilise un time_range explicite plutôt que date_preset=maximum
+    // car Meta peut omettre des campagnes récentes avec maximum sur certains comptes
+    const since = '2018-01-01'
+    const until = new Date().toISOString().split('T')[0]
+    const insightParams = period==='max'
+      ? `time_range={"since":"${since}","until":"${until}"}`
+      : `date_preset=last_30d`
     let insights = []
     for (const accountId of accountIds) {
-      let iurl = `${accountId}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&date_preset=${preset}&level=campaign&limit=50`
+      let iurl = `${accountId}/insights?fields=campaign_id,objective,spend,reach,impressions,actions&${insightParams}&level=campaign&limit=50`
       while(iurl) {
         const d = await fetchMeta(iurl, pdv.fb_token)
         insights = insights.concat(d.data||[])
