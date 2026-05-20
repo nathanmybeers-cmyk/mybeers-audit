@@ -1299,16 +1299,15 @@ function getFiltered(data30d, dataAll) {
   if(!dataAll || !Array.isArray(dataAll)) return []
   if(currentPeriod==='30d') return (data30d && Array.isArray(data30d) && !data30d.error) ? data30d : []
   if(currentPeriod==='max') return dataAll
-  const _campEnd = r => r.date_stop ? new Date(r.date_stop) : (r.status==='ACTIVE' ? new Date() : new Date(r.date_start))
   if(currentPeriod.startsWith('year-')) {
     const fy = parseInt(currentPeriod.replace('year-',''))
     const yS=new Date(fy,0,1), yE=new Date(fy,11,31)
-    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start)<=yE&&_campEnd(r)>=yS })
+    return dataAll.filter(r => { if(!r.date_start) return false; const s=new Date(r.date_start),e=r.date_stop?new Date(r.date_stop):new Date(); return s<=yE&&e>=yS })
   }
   if(currentPeriod.includes('-')) {
     const [fy,fm] = currentPeriod.split('-').map(Number)
     const mS=new Date(fy,fm,1), mE=new Date(fy,fm+1,0)
-    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start)<=mE&&_campEnd(r)>=mS })
+    return dataAll.filter(r => { if(!r.date_start) return false; const s=new Date(r.date_start),e=r.date_stop?new Date(r.date_stop):new Date(); return s<=mE&&e>=mS })
   }
   return dataAll
 }
@@ -1324,7 +1323,7 @@ function renderAdsTab(data, pdv, allData) {
   const _today = new Date()
   sourceForSelect.forEach(r => {
     if(!r.date_start) return
-    const s=new Date(r.date_start), e=r.date_stop ? new Date(r.date_stop) : (r.status==='ACTIVE' ? _today : s)
+    const s=new Date(r.date_start), e=r.date_stop ? new Date(r.date_stop) : _today
     let cur=new Date(s.getFullYear(), s.getMonth(), 1)
     const last=new Date(e.getFullYear(), e.getMonth(), 1)
     while(cur<=last){ const y=cur.getFullYear(),m=cur.getMonth(); if(!yearMonths[y])yearMonths[y]=new Set(); yearMonths[y].add(m); cur.setMonth(m+1) }
