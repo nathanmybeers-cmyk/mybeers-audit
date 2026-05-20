@@ -1303,20 +1303,25 @@ function campEnd(r) {
   return cap < new Date() ? cap : new Date()
 }
 function getFiltered(data30d, dataAll) {
-  if(!dataAll || !Array.isArray(dataAll)) return []
-  if(currentPeriod==='30d') return (data30d && Array.isArray(data30d) && !data30d.error) ? data30d : []
-  if(currentPeriod==='max') return dataAll
+  const d30 = (data30d && Array.isArray(data30d) && !data30d.error) ? data30d : []
+  const dAll = (dataAll && Array.isArray(dataAll)) ? dataAll : []
+  if(currentPeriod==='30d') return d30
+  if(currentPeriod==='max') return dAll
   if(currentPeriod.startsWith('year-')) {
     const fy = parseInt(currentPeriod.replace('year-',''))
     const yStart = new Date(fy, 0, 1), yEnd = new Date(fy, 11, 31)
-    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= yEnd && campEnd(r) >= yStart })
+    const fromAll = dAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= yEnd && campEnd(r) >= yStart })
+    if(fromAll.length) return fromAll
+    return d30.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= yEnd && campEnd(r) >= yStart })
   }
   if(currentPeriod.includes('-')) {
     const [fy,fm] = currentPeriod.split('-').map(Number)
     const mStart = new Date(fy, fm, 1), mEnd = new Date(fy, fm+1, 0)
-    return dataAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= mEnd && campEnd(r) >= mStart })
+    const fromAll = dAll.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= mEnd && campEnd(r) >= mStart })
+    if(fromAll.length) return fromAll
+    return d30.filter(r => { if(!r.date_start) return false; return new Date(r.date_start) <= mEnd && campEnd(r) >= mStart })
   }
-  return dataAll
+  return dAll
 }
 
 // ── TAB ADS ────────────────────────────────────────────────────────────────
@@ -1325,7 +1330,12 @@ function renderAdsTab(data, pdv, allData) {
   if(!data) return `<div class="card"><p class="empty">Aucune donnée.</p></div>`
   if(data.error) return `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${data.error}</div></div>`
 
-  const sourceForSelect = (allData && Array.isArray(allData) && !allData.error) ? allData : data
+  // Fusionner ads_max et ads_30d pour le sélecteur : ads_30d couvre les campagnes récentes
+  // absentes de ads_max (cache stale ou campagnes créées après le dernier fetch max)
+  const selectMap = {}
+  ;((allData && Array.isArray(allData) && !allData.error) ? allData : []).forEach(r => { if(r.campaign_id) selectMap[r.campaign_id] = r })
+  ;((data && Array.isArray(data) && !data.error) ? data : []).forEach(r => { if(r.campaign_id && !selectMap[r.campaign_id]) selectMap[r.campaign_id] = r })
+  const sourceForSelect = Object.values(selectMap)
   const yearMonths = {}
   sourceForSelect.forEach(r => {
     if(!r.date_start) return
