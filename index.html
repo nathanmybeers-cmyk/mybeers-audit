@@ -1714,10 +1714,13 @@ function _metricsFromTypedRows(rows){
   const nb_pubs=rows.length
   const budget_total=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
   const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
-  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return'fb';if(ol==='Trafic'||(r.campaign_name||'').toLowerCase().includes('instagram'))return'ig';return'fb+ig'}
-  const nb_fb=rows.filter(r=>getPlatform(r)==='fb').length
-  const nb_ig=rows.filter(r=>getPlatform(r)==='ig').length
-  const nb_fb_ig=rows.filter(r=>getPlatform(r)==='fb+ig').length
+  const platGroupMap={}
+  rows.forEach(r=>{const key=`${r._type}_${r.date_stop}`;if(!platGroupMap[key])platGroupMap[key]=[];platGroupMap[key].push(r.campaign_id)})
+  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';return'facebook'}
+  const nb_facebook=rows.filter(r=>getPlatform(r)==='facebook').length
+  const nb_instagram=rows.filter(r=>getPlatform(r)==='instagram').length
+  const nb_insta_fb=rows.filter(r=>getPlatform(r)==='insta_fb').length
+  const nb_event_fb=rows.filter(r=>getPlatform(r)==='event_fb').length
   const dRows=rows.filter(r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;return d!==null&&(DUREE_MIN_C[r._type]!==undefined||r._type==='Soirée')})
   const dVert=dRows.filter(r=>{const d=Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000);const ol=objMap[r.objective]||r.objective||'—';let min=DUREE_MIN_C[r._type];if(r._type==='Soirée')min=ol==='Événement'?14:5;return min!==undefined&&d>=min}).length
   const score_duree=dRows.length>0?dVert/dRows.length:null
@@ -1732,7 +1735,7 @@ function _metricsFromTypedRows(rows){
   const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
   const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
   const score_objectif=oRows.length>0?oVert/oRows.length:null
-  return{nb_pubs,budget_total,reach_total,nb_fb,nb_ig,nb_fb_ig,score_duree,score_budget,score_objectif}
+  return{nb_pubs,budget_total,reach_total,nb_facebook,nb_instagram,nb_insta_fb,nb_event_fb,score_duree,score_budget,score_objectif}
 }
 
 // Point d'entrée public : type les données brutes, calcule les métriques globales
@@ -1849,11 +1852,11 @@ async function loadComparatifPeriode(selectedMonths, force=false){
           <thead><tr>
             <th>#</th><th>Établissement</th>
             <th>Pubs</th><th>Budget</th><th>Couverture</th>
-            <th style="color:var(--blue-tx)">FB</th><th style="color:var(--pink-tx)">IG</th><th style="color:var(--purple-tx)">FB+IG</th>
+            <th style="color:var(--blue-tx)">Facebook</th><th style="color:var(--pink-tx)">Instagram</th><th style="color:var(--purple-tx)">Insta FB</th><th style="color:var(--blue-tx)">Event FB</th>
             <th>Durée</th><th>Budget cible</th><th>Objectif</th>
           </tr></thead>
           <tbody id="comp-tbody">
-            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="9" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="10" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
           </tbody>
         </table></div>
       </div>
@@ -1885,13 +1888,13 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         _compResults[pdv.id]=metriques
         if(tr) tr.outerHTML=compRowHtml(i,pdv,metriques)
       } else {
-        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="9" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
+        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="10" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
       }
       _compUpdateTypeBar()
     }catch(e){
       console.warn(`Comparatif ${pdv.nom}:`,e.message)
       const tr=document.getElementById(`cr-${pdv.id}`)
-      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="9" style="font-size:11px;color:var(--red)">Erreur</td>`
+      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="10" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
 }
@@ -1932,7 +1935,7 @@ function applyCompTypeFilter(type){
     if(m){
       tr.outerHTML=compRowHtml(i,pdv,m)
     } else {
-      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="9" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
+      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="10" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
     }
   })
 }
@@ -1945,9 +1948,10 @@ function compRowHtml(rank,pdv,m){
     <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
     <td><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
-    <td style="background:var(--blue-bg);color:var(--blue-tx);font-weight:600">${m.nb_fb||'—'}</td>
-    <td style="background:var(--pink-bg);color:var(--pink-tx);font-weight:600">${m.nb_ig||'—'}</td>
-    <td style="background:var(--purple-bg);color:var(--purple-tx);font-weight:600">${m.nb_fb_ig||'—'}</td>
+    <td style="background:var(--blue-bg);color:var(--blue-tx);font-weight:600">${m.nb_facebook||'—'}</td>
+    <td style="background:var(--pink-bg);color:var(--pink-tx);font-weight:600">${m.nb_instagram||'—'}</td>
+    <td style="background:var(--purple-bg);color:var(--purple-tx);font-weight:600">${m.nb_insta_fb||'—'}</td>
+    <td style="background:var(--blue-bg);color:var(--blue-tx);font-weight:600">${m.nb_event_fb||'—'}</td>
     <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
     <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
     <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>

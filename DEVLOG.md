@@ -147,43 +147,64 @@ Trois causes identifiées et corrigées en séquence :
 
 ## Session du 21 mai 2026
 
-### Comparatif global — refonte de l'interface et des métriques
+### Sélection de période
 
-#### Bug filtres par type non cliquables — RÉSOLU (`3341b12`)
+*Comparatif global*
 
-`JSON.stringify(t)` injectait des guillemets doubles à l'intérieur de l'attribut HTML `onclick="..."`, cassant le gestionnaire d'événement. Remplacé par `data-ctype` + `this.dataset.ctype` sur tous les boutons du type bar.
+- Année **2026** présélectionnée par défaut à l'ouverture du comparatif
+- Bouton **Changer la période** redessiné : vert, positionné à côté du titre/sous-titre, hauteur calée sur celle du bloc titre
+- Bouton **Recalculer** (admin) déplacé à droite dans le topbar, séparé du bouton de navigation
 
-#### Nouvelles colonnes FB / IG / FB+IG (`3341b12`)
+---
+
+### Filtres par type (`3341b12`)
+
+*Comparatif global*
+
+Barre de boutons colorés au-dessus du tableau (Apéro Quiz, Apéro Concert, Soirée, Sport). Cliquer sur un type affiche uniquement les métriques de ce type pour chaque établissement ; cliquer **Tous** réinitialise.
+
+- Les boutons utilisent les couleurs `TYPE_COLORS` (amber/vert/rouge/bleu) avec opacité réduite quand inactif
+- L'ordre alphabétique est préservé pendant le filtrage
+- **Bug `JSON.stringify` — RÉSOLU :** `JSON.stringify(t)` injectait des guillemets doubles dans `onclick="..."`, cassant le gestionnaire. Remplacé par `data-ctype` + `this.dataset.ctype`.
+
+---
+
+### Nouvelles colonnes FB / IG / FB+IG (`3341b12`)
+
+*Comparatif global*
 
 Détection de la plateforme par campagne (même logique que la page établissement) :
 - Objectif `Événement` → **FB**
 - Objectif `Trafic` ou `"instagram"` dans le nom de campagne → **IG**
 - Reste → **FB+IG**
 
-Trois colonnes triables ajoutées au comparatif, stockées dans `metriques` + `par_type` en Supabase.
+Trois colonnes ajoutées au comparatif, couleurs page établissement (bleu/rose/violet). Stockées dans `metriques` + `par_type` en Supabase.
 
-#### Visuels colonnes 1-2 (`3341b12`)
+---
 
-Fond `bg3` géré via CSS `nth-child(-n+2)` au lieu de styles inline — couvre correctement le `thead`, le `tbody` et le hover. `border-right` sur la col 2 comme séparateur.
+### Suppression score global et colonne Activité (`a4b304e`)
 
-#### Suppression du score global, tri alphabétique, couleurs types (`a4b304e`)
+*Comparatif global*
 
 - Score global (agrégat des 3 scores) et colonne Activité supprimés
-- Tri alphabétique par défaut (`localeCompare fr`) ; le filtre par type préserve l'ordre
-- Boutons de filtre par type colorés selon `TYPE_COLORS` (amber/vert/rouge/bleu) avec opacité réduite quand inactif
-- Colonnes FB/IG/FB+IG : couleurs page établissement (bleu/rose/violet)
-- Card tableau `padding:0;overflow:hidden` → fond bg3 cols 1-2 atteint les bords du bloc
+- Tri alphabétique par défaut (`localeCompare fr`) ; conservé lors du filtrage par type
+- Card tableau `padding:0;overflow:hidden` → fond `bg3` cols 1-2 atteint les bords du bloc
 - Suppression de `sortComparatif`, `compSortCol`, `compSortAsc`
 
 **Refactoring architecture :**
-- `par_type` stocké dans Supabase avec les métriques globales → le filtre par type fonctionne depuis le cache sans rappel Meta
+- `par_type` stocké dans Supabase avec les métriques globales → filtrage par type depuis le cache sans rappel Meta
 - `_metricsFromTypedRows` extrait pour calculer les métriques sur des lignes déjà typées (évite un re-typage hors contexte)
 
-#### Correctifs visuels et restauration colonnes qualité (`d5094c5`)
+---
 
-- Colonnes **Durée**, **Budget cible**, **Objectif** (avec %) restaurées (retrait involontaire)
+### Correctifs visuels et restauration colonnes qualité (`d5094c5`)
+
+*Comparatif global*
+
+- Colonnes **Durée**, **Budget cible**, **Objectif** (avec %) restaurées après retrait involontaire
 - `padding-top: 1rem` sur `thead` pour ne plus être collé au bord du bloc
-- Titres FB/IG/FB+IG colorés uniquement dans le `<th>` (pas dans les cellules voisines)
+- Fond `bg3` cols 1-2 via CSS `nth-child(-n+2)` — couvre `thead`, `tbody` et hover ; `border-right` sur col 2 comme séparateur
+- Titres FB/IG/FB+IG colorés dans le `<th>` uniquement
 - Cellules FB : fond bleu · IG : fond rose · FB+IG : fond violet (`--purple-bg`/`--purple-tx`)
 
 > **Note :** un clic sur "Recalculer" est nécessaire pour les établissements dont les entrées Supabase ont été créées avant cette session — elles n'ont pas encore `par_type` ni `nb_fb/nb_ig/nb_fb_ig`.

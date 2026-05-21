@@ -26,6 +26,7 @@
   .feature p:last-child{margin-bottom:0}
   ul{margin:6px 0 0 16px}
   li{font-size:13px;color:#444;margin-bottom:3px}
+  .ctx{font-size:11px;color:#999;font-style:italic;margin:2px 0 8px}
   .note{background:#FAEEDA;border-left:3px solid #EF9F27;border-radius:0 8px 8px 0;padding:12px 16px;margin-top:20px;font-size:12px;color:#633806}
   .note strong{font-weight:600}
   .pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:600;vertical-align:middle}
@@ -49,8 +50,49 @@
   </div>
 </header>
 
-<h1>Comparatif global — nouvelles fonctionnalités</h1>
-<p class="subtitle">Résumé des évolutions de l'outil pertinentes pour les animateurs réseau dans leur utilisation quotidienne.</p>
+<h1>Pages établissement</h1>
+<p class="subtitle">Guide d'utilisation et nouvelles fonctionnalités de l'onglet par établissement.</p>
+
+<h2>Guide d'utilisation</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-fix">Guide</span> Lire le tableau des publications</div>
+  <p>Chaque ligne correspond à une campagne publicitaire Meta. Les colonnes principales :</p>
+  <ul>
+    <li><strong>Type</strong> — catégorie détectée automatiquement selon le nom de la campagne et sa date (<span class="pill pill-amber">Apéro Quiz</span> <span class="pill pill-amber">Apéro Concert</span> <span class="pill pill-red">Soirée</span> <span class="pill pill-green">Sport</span>)</li>
+    <li><strong>Plateforme</strong> — <span class="pill pill-blue">FB</span> Facebook · <span class="pill pill-pink">IG</span> Instagram · <span class="pill pill-purple">FB+IG</span> les deux</li>
+    <li><strong>Budget</strong> — montant total dépensé sur la période</li>
+    <li><strong>Portée</strong> — nombre de personnes touchées</li>
+    <li><strong>Durée</strong> — nombre de jours de diffusion</li>
+  </ul>
+  <p style="margin-top:8px">Cliquer sur une ligne pour afficher le détail de l'audience ciblée (âge, localisation).</p>
+</div>
+
+<h2>Nouvelles fonctionnalités</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-new">Nouveau</span> Zone audience</div>
+  <p>Cliquer sur une ligne du tableau déplie un résumé du ciblage Meta associé à cette campagne.</p>
+  <ul>
+    <li><strong>Âge</strong> — tranche d'âge ciblée configurée dans Meta (ex : 18–55 ans)</li>
+    <li><strong>Localisation</strong> — ville ciblée, avec rayon si configuré (ex : Bordeaux +15 km). Si aucun rayon n'est défini dans Meta, seule la ville s'affiche — c'est normal.</li>
+  </ul>
+</div>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-new">Nouveau</span> Filtre par type d'événement</div>
+  <p>Le tableau des publications peut être filtré par type pour n'afficher que les publicités d'un type donné. Le filtre <strong>Tous</strong> réaffiche l'ensemble.</p>
+</div>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-fix">Amélioré</span> Sélection de période personnalisée</div>
+  <p>Le bouton <strong>Personnalisé</strong> a été remplacé par un sélecteur de plage de dates (date de début / date de fin). Il permet de charger n'importe quelle période directement depuis Meta, sans être limité par les données déjà en cache.</p>
+</div>
+
+<hr class="divider">
+
+<h1>Comparatif global</h1>
+<p class="subtitle">Nouvelles fonctionnalités et évolutions du tableau comparatif réseau.</p>
 
 <h2>Filtres par type d'événement</h2>
 
@@ -88,8 +130,6 @@
   </ul>
   <p style="margin-top:8px"><span class="pill pill-green">≥ 80 %</span> &nbsp;<span class="pill pill-amber">≥ 50 %</span> &nbsp;<span class="pill pill-red">&lt; 50 %</span></p>
 </div>
-
-<hr class="divider">
 
 <h2>Améliorations de navigation</h2>
 
