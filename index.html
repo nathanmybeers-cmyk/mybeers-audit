@@ -1699,10 +1699,9 @@ async function saveComparatifEntry(etablissement_id,mois,metriques){
   if(!r.ok) throw new Error(`Supabase ${r.status}`)
 }
 
-// computeRangeMetrics : même logique que computeMonthMetrics mais sans filtre par date_start.
-// Travaille sur les données déjà filtrées par l'API Meta (time_range) et par loadAds (page_id).
-function computeRangeMetrics(data, nbMonths=1, includeActivite=true){
-  const rows=computeTypes(data||[])
+// Calcule les métriques à partir de lignes déjà typées (post-computeTypes).
+// N'appelle pas computeTypes — utilisé aussi bien pour le global que pour le par_type.
+function _metricsFromTypedRows(rows, nbMonths=1, includeActivite=true){
   if(!rows.length) return null
   const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
   const DUREE_MIN_C={'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5}
@@ -1724,15 +1723,30 @@ function computeRangeMetrics(data, nbMonths=1, includeActivite=true){
   const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
   const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
   const score_objectif=oRows.length>0?oVert/oRows.length:null
-  // score_activite : 6 pubs/mois = 100%, en dessous pénalise le score global
   const score_activite=includeActivite?Math.min(1,nb_pubs/(6*nbMonths)):null
   const scores=[score_duree,score_budget,score_objectif,score_activite].filter(s=>s!==null)
   const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
   return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_activite,score_global}
 }
 
+// Point d'entrée public : type les données brutes, calcule les métriques globales
+// + un breakdown par type (par_type) stocké dans Supabase pour le filtre sans re-appel Meta.
+function computeRangeMetrics(data, nbMonths=1){
+  const rows=computeTypes(data||[])
+  if(!rows.length) return null
+  const global=_metricsFromTypedRows(rows,nbMonths,true)
+  if(!global) return null
+  const types=[...new Set(rows.map(r=>r._type).filter(Boolean))]
+  const par_type={}
+  types.forEach(t=>{
+    const tm=_metricsFromTypedRows(rows.filter(r=>r._type===t),1,false)
+    if(tm) par_type[t]=tm
+  })
+  return{...global,par_type}
+}
+
 let compSortCol='score_global',compSortAsc=false,compCurrentData={}
-let _compRawData={},_compTypeFilter=null
+let _compTypeFilter=null
 let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
 function renderComparatif(){
@@ -1797,7 +1811,6 @@ async function loadComparatifPeriode(selectedMonths, force=false){
   const cfg=sheetConfig||DB.cfg
   const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
   _compResults={}
-  _compRawData={}
   _compTypeFilter=null
   compCurrentData={selectedMonths,cfg}
 
@@ -1861,7 +1874,6 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         // force=true : contourne aussi le cache localStorage pour des données fraîches
         const rangeData=await loadAds(pdv,force,`range:${since}:${until}`)
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
-          _compRawData[pdv.id]=computeTypes(rangeData)
           metriques=computeRangeMetrics(rangeData,nbMonths)
           if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
         }
@@ -1886,7 +1898,7 @@ function _compUpdateTypeBar(){
   const bar=document.getElementById('comp-type-bar')
   if(!bar) return
   const allTypes=new Set()
-  Object.values(_compRawData).forEach(rows=>rows.forEach(r=>{if(r._type)allTypes.add(r._type)}))
+  Object.values(_compResults).forEach(m=>{Object.keys(m.par_type||{}).forEach(t=>allTypes.add(t))})
   const sorted=[...allTypes].sort()
   bar.innerHTML=['Tous',...sorted].map(t=>{
     const active=_compTypeFilter===null&&t==='Tous'||_compTypeFilter===t
@@ -1900,16 +1912,13 @@ function applyCompTypeFilter(type){
   const data=compCurrentData
   if(!data.cfg) return
   const pdvs=data.cfg.filter(p=>p.ad_account_id&&p.fb_token)
-  const nbMonths=data.selectedMonths?data.selectedMonths.length:1
   pdvs.forEach((pdv,i)=>{
-    const raw=_compRawData[pdv.id]
-    if(!raw) return
-    const filtered=type?raw.filter(r=>r._type===type):raw
-    const m=computeRangeMetrics(filtered,type?1:nbMonths,!type)
+    const full=_compResults[pdv.id]
+    if(!full) return
+    const m=type?(full.par_type&&full.par_type[type])||null:full
     const tr=document.getElementById(`cr-${pdv.id}`)
     if(!tr) return
     if(m){
-      _compResults[pdv.id]=m
       tr.outerHTML=compRowHtml(i,pdv,m)
     } else {
       tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
