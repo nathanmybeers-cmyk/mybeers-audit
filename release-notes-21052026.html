@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Notes de version — mybeers-audit — 21 mai 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;background:#fff;padding:48px 56px;max-width:820px;margin:0 auto}
+  @media print{body{padding:32px 40px}@page{margin:20mm 18mm}}
+  header{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:20px;border-bottom:2px solid #2cb5b5;margin-bottom:36px}
+  .logo{font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.5px}
+  .logo span{color:#2cb5b5}
+  .meta{font-size:12px;color:#666;text-align:right}
+  .meta strong{display:block;font-size:14px;color:#1a1a1a;font-weight:600}
+  h1{font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:6px}
+  .subtitle{font-size:13px;color:#666;margin-bottom:36px}
+  h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#2cb5b5;margin:32px 0 14px}
+  h2:first-of-type{margin-top:0}
+  .feature{background:#f7f7f5;border-radius:10px;padding:18px 20px;margin-bottom:12px}
+  .feature-title{font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:500}
+  .tag-new{background:#E0F7F7;color:#0a4a4a}
+  .tag-fix{background:#E6F1FB;color:#0C447C}
+  .feature p{font-size:13px;color:#444;margin-bottom:6px}
+  .feature p:last-child{margin-bottom:0}
+  ul{margin:6px 0 0 16px}
+  li{font-size:13px;color:#444;margin-bottom:3px}
+  .note{background:#FAEEDA;border-left:3px solid #EF9F27;border-radius:0 8px 8px 0;padding:12px 16px;margin-top:20px;font-size:12px;color:#633806}
+  .note strong{font-weight:600}
+  .pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:600;vertical-align:middle}
+  .pill-blue{background:#E6F1FB;color:#0C447C}
+  .pill-pink{background:#FBEAF0;color:#72243E}
+  .pill-purple{background:#EEEDFE;color:#3C3489}
+  .pill-amber{background:#FAEEDA;color:#633806}
+  .pill-green{background:#E0F7F7;color:#0a4a4a}
+  .pill-red{background:#FCEBEB;color:#791F1F}
+  .divider{border:none;border-top:1px solid #e8e6e1;margin:28px 0}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid #e8e6e1;font-size:11px;color:#999;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">mybeers<span>-audit</span></div>
+  <div class="meta">
+    <strong>Notes de version</strong>
+    21 mai 2026
+  </div>
+</header>
+
+<h1>Comparatif global — nouvelles fonctionnalités</h1>
+<p class="subtitle">Résumé des évolutions de l'outil pertinentes pour les animateurs réseau dans leur utilisation quotidienne.</p>
+
+<h2>Filtres par type d'événement</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-new">Nouveau</span> Filtrer le tableau par type</div>
+  <p>Une barre de boutons colorés apparaît au-dessus du tableau comparatif. Cliquer sur un type — <span class="pill pill-amber">Apéro Quiz</span> <span class="pill pill-amber">Apéro Concert</span> <span class="pill pill-red">Soirée</span> <span class="pill pill-green">Sport</span> — affiche uniquement les métriques correspondant à ce type pour chaque établissement.</p>
+  <ul>
+    <li>Les établissements sans publication de ce type affichent « Aucune pub de ce type »</li>
+    <li>Cliquer sur <strong>Tous</strong> réinitialise l'affichage complet</li>
+    <li>L'ordre alphabétique des établissements est conservé lors du filtrage</li>
+  </ul>
+</div>
+
+<h2>Nouvelles colonnes plateformes</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-new">Nouveau</span> Répartition FB / IG / FB+IG</div>
+  <p>Trois nouvelles colonnes indiquent pour chaque établissement le nombre de publicités diffusées par plateforme sur la période sélectionnée.</p>
+  <ul>
+    <li><span class="pill pill-blue">FB</span> — publicités sur Facebook uniquement (événements)</li>
+    <li><span class="pill pill-pink">IG</span> — publicités sur Instagram (objectif Trafic ou nom de campagne "Instagram")</li>
+    <li><span class="pill pill-purple">FB+IG</span> — publicités diffusées sur les deux plateformes simultanément</li>
+  </ul>
+</div>
+
+<h2>Indicateurs qualité</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-new">Nouveau</span> Durée · Budget cible · Objectif</div>
+  <p>Trois colonnes de qualité affichent un pourcentage coloré pour chaque établissement sur la période :</p>
+  <ul>
+    <li><strong>Durée</strong> — part des pubs dont la durée atteint le minimum recommandé selon le type</li>
+    <li><strong>Budget cible</strong> — part des pubs dont le budget total atteint ≥ 90 % du budget cible par type</li>
+    <li><strong>Objectif</strong> — part des pubs avec un objectif recommandé (Interaction, Trafic ou Événement)</li>
+  </ul>
+  <p style="margin-top:8px"><span class="pill pill-green">≥ 80 %</span> &nbsp;<span class="pill pill-amber">≥ 50 %</span> &nbsp;<span class="pill pill-red">&lt; 50 %</span></p>
+</div>
+
+<hr class="divider">
+
+<h2>Améliorations de navigation</h2>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-fix">Amélioré</span> Sélection de période</div>
+  <ul>
+    <li>L'année <strong>2026</strong> est présélectionnée par défaut à l'ouverture du comparatif</li>
+    <li>Le bouton <strong>Changer la période</strong> est maintenant vert et bien visible à côté du titre</li>
+    <li>Le bouton <strong>Recalculer</strong> (admin) est positionné à droite, séparé du bouton de navigation</li>
+  </ul>
+</div>
+
+<div class="feature">
+  <div class="feature-title"><span class="tag tag-fix">Amélioré</span> Lisibilité du tableau</div>
+  <ul>
+    <li>Établissements triés par <strong>ordre alphabétique</strong></li>
+    <li>Colonnes <strong>#</strong> et <strong>Établissement</strong> avec fond distinct pour faciliter la lecture sur les grands tableaux</li>
+    <li>Titres des colonnes FB / IG / FB+IG colorés pour correspondre aux cellules</li>
+    <li>Les données se chargent <strong>ligne par ligne</strong> au fur et à mesure — pas besoin d'attendre la fin pour consulter les premiers résultats</li>
+  </ul>
+</div>
+
+<div class="note">
+  <strong>Action requise pour certains établissements</strong><br>
+  Les établissements dont les données comparatif ont été calculées avant cette mise à jour (Orléans Sud/Fleury, Montargis, Chambray et autres) n'ont pas encore les colonnes FB/IG/FB+IG ni les filtres par type. Cliquer sur <strong>Recalculer</strong> dans le topbar du comparatif pour rafraîchir leurs données.
+</div>
+
+<footer>
+  <span>mybeers-audit · usage interne réseau MyBeers</span>
+  <span>Session 21 mai 2026</span>
+</footer>
+
+</body>
+</html>

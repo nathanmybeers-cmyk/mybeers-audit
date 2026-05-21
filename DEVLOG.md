@@ -142,3 +142,48 @@ Trois causes identifiées et corrigées en séquence :
 - Disponible dans le topbar (admin uniquement)
 - Supprime les entrées Supabase pour la période, vide le cache localStorage, re-fetch depuis Meta avec `force=true`
 - Résout les établissements (Orléans Sud/Fleury, Montargis, Chambray) dont les données Supabase avaient été calculées avec l'ancienne logique sans filtre `page_id`
+
+---
+
+## Session du 21 mai 2026
+
+### Comparatif global — refonte de l'interface et des métriques
+
+#### Bug filtres par type non cliquables — RÉSOLU (`3341b12`)
+
+`JSON.stringify(t)` injectait des guillemets doubles à l'intérieur de l'attribut HTML `onclick="..."`, cassant le gestionnaire d'événement. Remplacé par `data-ctype` + `this.dataset.ctype` sur tous les boutons du type bar.
+
+#### Nouvelles colonnes FB / IG / FB+IG (`3341b12`)
+
+Détection de la plateforme par campagne (même logique que la page établissement) :
+- Objectif `Événement` → **FB**
+- Objectif `Trafic` ou `"instagram"` dans le nom de campagne → **IG**
+- Reste → **FB+IG**
+
+Trois colonnes triables ajoutées au comparatif, stockées dans `metriques` + `par_type` en Supabase.
+
+#### Visuels colonnes 1-2 (`3341b12`)
+
+Fond `bg3` géré via CSS `nth-child(-n+2)` au lieu de styles inline — couvre correctement le `thead`, le `tbody` et le hover. `border-right` sur la col 2 comme séparateur.
+
+#### Suppression du score global, tri alphabétique, couleurs types (`a4b304e`)
+
+- Score global (agrégat des 3 scores) et colonne Activité supprimés
+- Tri alphabétique par défaut (`localeCompare fr`) ; le filtre par type préserve l'ordre
+- Boutons de filtre par type colorés selon `TYPE_COLORS` (amber/vert/rouge/bleu) avec opacité réduite quand inactif
+- Colonnes FB/IG/FB+IG : couleurs page établissement (bleu/rose/violet)
+- Card tableau `padding:0;overflow:hidden` → fond bg3 cols 1-2 atteint les bords du bloc
+- Suppression de `sortComparatif`, `compSortCol`, `compSortAsc`
+
+**Refactoring architecture :**
+- `par_type` stocké dans Supabase avec les métriques globales → le filtre par type fonctionne depuis le cache sans rappel Meta
+- `_metricsFromTypedRows` extrait pour calculer les métriques sur des lignes déjà typées (évite un re-typage hors contexte)
+
+#### Correctifs visuels et restauration colonnes qualité (`d5094c5`)
+
+- Colonnes **Durée**, **Budget cible**, **Objectif** (avec %) restaurées (retrait involontaire)
+- `padding-top: 1rem` sur `thead` pour ne plus être collé au bord du bloc
+- Titres FB/IG/FB+IG colorés uniquement dans le `<th>` (pas dans les cellules voisines)
+- Cellules FB : fond bleu · IG : fond rose · FB+IG : fond violet (`--purple-bg`/`--purple-tx`)
+
+> **Note :** un clic sur "Recalculer" est nécessaire pour les établissements dont les entrées Supabase ont été créées avant cette session — elles n'ont pas encore `par_type` ni `nb_fb/nb_ig/nb_fb_ig`.
