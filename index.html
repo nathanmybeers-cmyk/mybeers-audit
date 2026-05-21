@@ -1701,7 +1701,7 @@ async function saveComparatifEntry(etablissement_id,mois,metriques){
 
 // computeRangeMetrics : même logique que computeMonthMetrics mais sans filtre par date_start.
 // Travaille sur les données déjà filtrées par l'API Meta (time_range) et par loadAds (page_id).
-function computeRangeMetrics(data){
+function computeRangeMetrics(data, nbMonths=1, includeActivite=true){
   const rows=computeTypes(data||[])
   if(!rows.length) return null
   const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
@@ -1724,12 +1724,15 @@ function computeRangeMetrics(data){
   const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
   const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
   const score_objectif=oRows.length>0?oVert/oRows.length:null
-  const scores=[score_duree,score_budget,score_objectif].filter(s=>s!==null)
+  // score_activite : 6 pubs/mois = 100%, en dessous pénalise le score global
+  const score_activite=includeActivite?Math.min(1,nb_pubs/(6*nbMonths)):null
+  const scores=[score_duree,score_budget,score_objectif,score_activite].filter(s=>s!==null)
   const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
-  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_global}
+  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_activite,score_global}
 }
 
 let compSortCol='score_global',compSortAsc=false,compCurrentData={}
+let _compRawData={},_compTypeFilter=null
 let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
 function renderComparatif(){
@@ -1752,7 +1755,7 @@ function renderComparatif(){
         <button class="btn btn-primary" onclick="launchComparatif()">Lancer le calcul</button>
       </div>
     </div>`
-  compSelectYear(cy-1)
+  compSelectYear(cy)
 }
 
 function compSelectYear(year){
@@ -1794,8 +1797,11 @@ async function loadComparatifPeriode(selectedMonths, force=false){
   const cfg=sheetConfig||DB.cfg
   const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
   _compResults={}
+  _compRawData={}
+  _compTypeFilter=null
   compCurrentData={selectedMonths,cfg}
 
+  const nbMonths=selectedMonths.length
   const since=selectedMonths[0]+'-01'
   const[ly,lm]=selectedMonths[selectedMonths.length-1].split('-').map(Number)
   const until=new Date(ly,lm,0).toISOString().split('T')[0]
@@ -1807,28 +1813,32 @@ async function loadComparatifPeriode(selectedMonths, force=false){
 
   const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
   const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
+  const thBg='background:var(--bg3)'
 
   document.getElementById('main').innerHTML=`
     <div class="topbar">
-      <div>
-        <h1>Comparatif global</h1>
-        <div style="font-size:12px;color:var(--tx2);margin-top:2px">${periodLabel}</div>
+      <div style="display:flex;align-items:stretch;gap:12px">
+        <div>
+          <h1>Comparatif global</h1>
+          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${periodLabel}</div>
+        </div>
+        <button class="btn btn-primary" onclick="renderComparatif()" style="font-size:13px;padding:0 18px;line-height:1.3">Changer<br>la période</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        ${currentRole==='admin'?`<button class="btn btn-sm" onclick="recalculerComparatifPeriode()">Recalculer</button>`:''}
-        <button class="btn btn-sm" onclick="renderComparatif()">← Changer la période</button>
-      </div>
+      ${currentRole==='admin'?`<button class="btn btn-sm" onclick="recalculerComparatifPeriode()">Recalculer</button>`:''}
     </div>
-    <div id="comp-body" style="padding:1.5rem">
+    <div id="comp-body" style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
+      <div id="comp-type-bar" style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="applyCompTypeFilter(null)">Tous</button>
+      </div>
       <div class="card" id="comp-table-wrap">
         <div class="tbl-wrap"><table class="t">
           <thead><tr>
-            <th>#</th><th class="tal">Établissement</th>
+            <th style="${thBg}">#</th><th style="${thBg}">Établissement</th>
             ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
-            ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_global','Score ★')}
+            ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_activite','Activité')}${th('score_global','Score ★')}
           </tr></thead>
           <tbody id="comp-tbody">
-            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
           </tbody>
         </table></div>
       </div>
@@ -1851,7 +1861,8 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         // force=true : contourne aussi le cache localStorage pour des données fraîches
         const rangeData=await loadAds(pdv,force,`range:${since}:${until}`)
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
-          metriques=computeRangeMetrics(rangeData)
+          _compRawData[pdv.id]=computeTypes(rangeData)
+          metriques=computeRangeMetrics(rangeData,nbMonths)
           if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
         }
       }
@@ -1860,27 +1871,66 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         _compResults[pdv.id]=metriques
         if(tr) tr.outerHTML=compRowHtml(i,pdv,metriques)
       } else {
-        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
+        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
       }
+      _compUpdateTypeBar()
     }catch(e){
       console.warn(`Comparatif ${pdv.nom}:`,e.message)
       const tr=document.getElementById(`cr-${pdv.id}`)
-      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="7" style="font-size:11px;color:var(--red)">Erreur</td>`
+      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
 }
 
+function _compUpdateTypeBar(){
+  const bar=document.getElementById('comp-type-bar')
+  if(!bar) return
+  const allTypes=new Set()
+  Object.values(_compRawData).forEach(rows=>rows.forEach(r=>{if(r._type)allTypes.add(r._type)}))
+  const sorted=[...allTypes].sort()
+  bar.innerHTML=['Tous',...sorted].map(t=>{
+    const active=_compTypeFilter===null&&t==='Tous'||_compTypeFilter===t
+    return`<button class="btn btn-sm${active?' btn-primary':''}" onclick="applyCompTypeFilter(${t==='Tous'?'null':JSON.stringify(t)})">${t}</button>`
+  }).join('')
+}
+
+function applyCompTypeFilter(type){
+  _compTypeFilter=type
+  _compUpdateTypeBar()
+  const data=compCurrentData
+  if(!data.cfg) return
+  const pdvs=data.cfg.filter(p=>p.ad_account_id&&p.fb_token)
+  const nbMonths=data.selectedMonths?data.selectedMonths.length:1
+  pdvs.forEach((pdv,i)=>{
+    const raw=_compRawData[pdv.id]
+    if(!raw) return
+    const filtered=type?raw.filter(r=>r._type===type):raw
+    const m=computeRangeMetrics(filtered,type?1:nbMonths,!type)
+    const tr=document.getElementById(`cr-${pdv.id}`)
+    if(!tr) return
+    if(m){
+      _compResults[pdv.id]=m
+      tr.outerHTML=compRowHtml(i,pdv,m)
+    } else {
+      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
+    }
+  })
+  sortComparatif(compSortCol)
+}
+
 function compRowHtml(rank,pdv,m){
-  const sc=s=>s===null?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
-  const sp=s=>s===null?'—':`${Math.round(s*100)}%`
+  const sc=s=>(s==null)?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
+  const sp=s=>(s==null)?'—':`${Math.round(s*100)}%`
   const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
+  const bg='background:var(--bg3)'
   return`<tr id="cr-${pdv.id}">
-    <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
-    <td class="tal"><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
+    <td style="font-weight:600;color:var(--tx3);${bg}">${rank+1}</td>
+    <td style="${bg}"><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
     <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
     <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
     <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
+    <td style="color:${sc(m.score_activite)};font-weight:500">${sp(m.score_activite)}</td>
     <td><span style="font-size:15px;font-weight:700;color:${sc(m.score_global)}">${sp(m.score_global)}</span></td>
   </tr>`
 }
