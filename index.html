@@ -94,6 +94,7 @@ table.t tr:hover td{background:var(--bg3)}
 #comp-table-wrap table.t th:nth-child(-n+2),#comp-table-wrap table.t td:nth-child(-n+2){background:var(--bg3)}
 #comp-table-wrap table.t tr:hover td:nth-child(-n+2){background:var(--bg3)}
 #comp-table-wrap table.t th:nth-child(2),#comp-table-wrap table.t td:nth-child(2){border-right:1.5px solid var(--bd2)}
+#comp-type-bar .btn:hover{opacity:1!important;background:inherit!important}
 .empty{font-size:13px;color:var(--tx2);padding:.5rem 0}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -1704,11 +1705,9 @@ async function saveComparatifEntry(etablissement_id,mois,metriques){
 
 // Calcule les métriques à partir de lignes déjà typées (post-computeTypes).
 // N'appelle pas computeTypes — utilisé aussi bien pour le global que pour le par_type.
-function _metricsFromTypedRows(rows, nbMonths=1, includeActivite=true){
+function _metricsFromTypedRows(rows){
   if(!rows.length) return null
   const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
-  const DUREE_MIN_C={'Apéro Concert':5,'Apéro Quiz':4,'Club Mix':5,'Open Mix':5,'Fléchettes':4,'SBK':4,'Crush':4,'Sport':2,'Karaoke':4,'Comedy Club':4,'Divers':2,'Beer Pong':7,'Flash Tattoo':4,'Poker':5}
-  const BUDGET_CIBLE_C={'Apéro Concert':50,'Apéro Quiz':40,'Club Mix':50,'Open Mix':50,'Fléchettes':30,'SBK':30,'Crush':30,'Sport':20,'Karaoke':50,'Comedy Club':30,'Divers':20,'Beer Pong':70,'Flash Tattoo':30,'Poker':30}
   const nb_pubs=rows.length
   const budget_total=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
   const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
@@ -1716,43 +1715,26 @@ function _metricsFromTypedRows(rows, nbMonths=1, includeActivite=true){
   const nb_fb=rows.filter(r=>getPlatform(r)==='fb').length
   const nb_ig=rows.filter(r=>getPlatform(r)==='ig').length
   const nb_fb_ig=rows.filter(r=>getPlatform(r)==='fb+ig').length
-  const dRows=rows.filter(r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;return d!==null&&(DUREE_MIN_C[r._type]!==undefined||r._type==='Soirée')})
-  const dVert=dRows.filter(r=>{const d=Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000);const ol=objMap[r.objective]||r.objective||'—';let min=DUREE_MIN_C[r._type];if(r._type==='Soirée')min=ol==='Événement'?14:5;return min!==undefined&&d>=min}).length
-  const score_duree=dRows.length>0?dVert/dRows.length:null
-  const getBT=r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;if(r.lifetime_budget)return r.lifetime_budget;if(r.daily_budget&&d)return r.daily_budget*d;return null}
-  const bgMap={}
-  rows.forEach(r=>{if(r._type==='Soirée')return;const cible=BUDGET_CIBLE_C[r._type];if(!cible)return;const key=`${r._type}_${r.date_stop}`;if(!bgMap[key])bgMap[key]={cible,total:0,ids:[]};const bt=getBT(r);if(bt)bgMap[key].total+=bt;bgMap[key].ids.push(r.campaign_id)})
-  const bBadge={}
-  Object.values(bgMap).forEach(g=>{const cls=g.total/g.cible>=0.9?'ok':g.total/g.cible>=0.7?'warn':'bad';g.ids.forEach(id=>{bBadge[id]=cls})})
-  const bRows=rows.filter(r=>{const bt=getBT(r);if(!bt)return false;const ol=objMap[r.objective]||r.objective||'—';if(r._type==='Soirée')return['Événement','Interaction','Trafic'].includes(ol);return BUDGET_CIBLE_C[r._type]!==undefined})
-  const bVert=bRows.filter(r=>{if(r._type==='Soirée'){const bt=getBT(r);const ol=objMap[r.objective]||r.objective||'—';return bt/(ol==='Événement'?100:50)>=0.9}return bBadge[r.campaign_id]==='ok'}).length
-  const score_budget=bRows.length>0?bVert/bRows.length:null
-  const oRows=rows.filter(r=>{const ol=objMap[r.objective]||r.objective||'—';return ol!=='—'})
-  const oVert=oRows.filter(r=>['Interaction','Trafic','Événement'].includes(objMap[r.objective]||r.objective||'—')).length
-  const score_objectif=oRows.length>0?oVert/oRows.length:null
-  const score_activite=includeActivite?Math.min(1,nb_pubs/(6*nbMonths)):null
-  const scores=[score_duree,score_budget,score_objectif,score_activite].filter(s=>s!==null)
-  const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
-  return{nb_pubs,budget_total,reach_total,nb_fb,nb_ig,nb_fb_ig,score_duree,score_budget,score_objectif,score_activite,score_global}
+  return{nb_pubs,budget_total,reach_total,nb_fb,nb_ig,nb_fb_ig}
 }
 
 // Point d'entrée public : type les données brutes, calcule les métriques globales
 // + un breakdown par type (par_type) stocké dans Supabase pour le filtre sans re-appel Meta.
-function computeRangeMetrics(data, nbMonths=1){
+function computeRangeMetrics(data){
   const rows=computeTypes(data||[])
   if(!rows.length) return null
-  const global=_metricsFromTypedRows(rows,nbMonths,true)
+  const global=_metricsFromTypedRows(rows)
   if(!global) return null
   const types=[...new Set(rows.map(r=>r._type).filter(Boolean))]
   const par_type={}
   types.forEach(t=>{
-    const tm=_metricsFromTypedRows(rows.filter(r=>r._type===t),1,false)
+    const tm=_metricsFromTypedRows(rows.filter(r=>r._type===t))
     if(tm) par_type[t]=tm
   })
   return{...global,par_type}
 }
 
-let compSortCol='score_global',compSortAsc=false,compCurrentData={}
+let compCurrentData={}
 let _compTypeFilter=null
 let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
@@ -1816,12 +1798,11 @@ async function recalculerComparatifPeriode(){
 
 async function loadComparatifPeriode(selectedMonths, force=false){
   const cfg=sheetConfig||DB.cfg
-  const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token)
+  const pdvs=cfg.filter(p=>p.ad_account_id&&p.fb_token).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'))
   _compResults={}
   _compTypeFilter=null
-  compCurrentData={selectedMonths,cfg}
+  compCurrentData={selectedMonths,cfg,pdvs}
 
-  const nbMonths=selectedMonths.length
   const since=selectedMonths[0]+'-01'
   const[ly,lm]=selectedMonths[selectedMonths.length-1].split('-').map(Number)
   const until=new Date(ly,lm,0).toISOString().split('T')[0]
@@ -1831,8 +1812,6 @@ async function loadComparatifPeriode(selectedMonths, force=false){
     ?moisLabel(selectedMonths[0])
     :`${moisLabel(selectedMonths[0])} → ${moisLabel(selectedMonths[selectedMonths.length-1])}`
 
-  const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
-  const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
   document.getElementById('main').innerHTML=`
     <div class="topbar">
       <div style="display:flex;align-items:stretch;gap:24px">
@@ -1848,16 +1827,15 @@ async function loadComparatifPeriode(selectedMonths, force=false){
       <div id="comp-type-bar" style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm btn-primary" data-ctype="Tous" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">Tous</button>
       </div>
-      <div class="card" id="comp-table-wrap">
+      <div class="card" id="comp-table-wrap" style="padding:0;overflow:hidden">
         <div class="tbl-wrap"><table class="t">
           <thead><tr>
             <th>#</th><th>Établissement</th>
-            ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
-            ${th('nb_fb','FB')}${th('nb_ig','IG')}${th('nb_fb_ig','FB+IG')}
-            ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_activite','Activité')}${th('score_global','Score ★')}
+            <th>Pubs</th><th>Budget</th><th>Couverture</th>
+            <th>FB</th><th>IG</th><th>FB+IG</th>
           </tr></thead>
           <tbody id="comp-tbody">
-            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="6" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
           </tbody>
         </table></div>
       </div>
@@ -1880,7 +1858,7 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         // force=true : contourne aussi le cache localStorage pour des données fraîches
         const rangeData=await loadAds(pdv,force,`range:${since}:${until}`)
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
-          metriques=computeRangeMetrics(rangeData,nbMonths)
+          metriques=computeRangeMetrics(rangeData)
           if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
         }
       }
@@ -1889,17 +1867,24 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         _compResults[pdv.id]=metriques
         if(tr) tr.outerHTML=compRowHtml(i,pdv,metriques)
       } else {
-        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
+        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="6" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
       }
       _compUpdateTypeBar()
     }catch(e){
       console.warn(`Comparatif ${pdv.nom}:`,e.message)
       const tr=document.getElementById(`cr-${pdv.id}`)
-      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--red)">Erreur</td>`
+      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="6" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
 }
 
+const _TYPE_BTN_STYLE={
+  'ba':`background:var(--amber-bg);color:var(--amber-tx);border-color:var(--amber-bg)`,
+  'bg':`background:var(--green-bg);color:var(--green-tx);border-color:var(--green-bg)`,
+  'br':`background:var(--red-bg);color:var(--red-tx);border-color:var(--red-bg)`,
+  'bb':`background:var(--blue-bg);color:var(--blue-tx);border-color:var(--blue-bg)`,
+  'bpi':`background:var(--pink-bg);color:var(--pink-tx);border-color:var(--pink-bg)`,
+}
 function _compUpdateTypeBar(){
   const bar=document.getElementById('comp-type-bar')
   if(!bar) return
@@ -1907,17 +1892,19 @@ function _compUpdateTypeBar(){
   Object.values(_compResults).forEach(m=>{Object.keys(m.par_type||{}).forEach(t=>allTypes.add(t))})
   const sorted=[...allTypes].sort()
   bar.innerHTML=['Tous',...sorted].map(t=>{
-    const active=_compTypeFilter===null&&t==='Tous'||_compTypeFilter===t
-    return`<button class="btn btn-sm${active?' btn-primary':''}" data-ctype="${t}" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">${t}</button>`
+    const isAll=t==='Tous'
+    const active=_compTypeFilter===null&&isAll||_compTypeFilter===t
+    if(isAll) return`<button class="btn btn-sm${active?' btn-primary':''}" data-ctype="Tous" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">Tous</button>`
+    const tc=TYPE_COLORS[t]||'bb'
+    const style=(_TYPE_BTN_STYLE[tc]||_TYPE_BTN_STYLE['bb'])+(active?'':';opacity:0.4')
+    return`<button class="btn btn-sm" style="${style}" data-ctype="${t}" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">${t}</button>`
   }).join('')
 }
 
 function applyCompTypeFilter(type){
   _compTypeFilter=type
   _compUpdateTypeBar()
-  const data=compCurrentData
-  if(!data.cfg) return
-  const pdvs=data.cfg.filter(p=>p.ad_account_id&&p.fb_token)
+  const pdvs=compCurrentData.pdvs||[]
   pdvs.forEach((pdv,i)=>{
     const full=_compResults[pdv.id]
     if(!full) return
@@ -1927,50 +1914,22 @@ function applyCompTypeFilter(type){
     if(m){
       tr.outerHTML=compRowHtml(i,pdv,m)
     } else {
-      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
+      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="6" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
     }
   })
-  sortComparatif(compSortCol)
 }
 
 function compRowHtml(rank,pdv,m){
-  const sc=s=>(s==null)?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
-  const sp=s=>(s==null)?'—':`${Math.round(s*100)}%`
   const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
-  const nn=n=>(n==null)?'—':n
+  const fbCell=m.nb_fb>0?`<span style="color:var(--blue-tx);font-weight:600">${m.nb_fb}</span>`:'—'
+  const igCell=m.nb_ig>0?`<span style="color:var(--pink-tx);font-weight:600">${m.nb_ig}</span>`:'—'
+  const fbiCell=m.nb_fb_ig>0?`<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:600"><span style="background:var(--pink-bg);color:var(--pink-tx);padding:1px 5px">IG</span><span style="background:var(--blue-bg);color:var(--blue-tx);padding:1px 5px">${m.nb_fb_ig}</span></span>`:'—'
   return`<tr id="cr-${pdv.id}">
     <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
     <td><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
-    <td>${nn(m.nb_fb)}</td><td>${nn(m.nb_ig)}</td><td>${nn(m.nb_fb_ig)}</td>
-    <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
-    <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
-    <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
-    <td style="color:${sc(m.score_activite)};font-weight:500">${sp(m.score_activite)}</td>
-    <td><span style="font-size:15px;font-weight:700;color:${sc(m.score_global)}">${sp(m.score_global)}</span></td>
+    <td>${fbCell}</td><td>${igCell}</td><td>${fbiCell}</td>
   </tr>`
-}
-
-function sortComparatif(col){
-  if(compSortCol===col) compSortAsc=!compSortAsc
-  else{compSortCol=col;compSortAsc=false}
-  const tbody=document.getElementById('comp-tbody')
-  if(!tbody||!compCurrentData.cfg) return
-  const pdvs=compCurrentData.cfg.filter(p=>p.ad_account_id&&p.fb_token)
-  const withData=pdvs.filter(p=>_compResults[p.id])
-  const noData=pdvs.filter(p=>!_compResults[p.id])
-  const sorted=[...withData].sort((a,b)=>{
-    const va=_compResults[a.id][col]??-1,vb=_compResults[b.id][col]??-1
-    return compSortAsc?va-vb:vb-va
-  })
-  const ordered=[...sorted,...noData]
-  ordered.forEach((pdv,i)=>{const tr=document.getElementById(`cr-${pdv.id}`);if(tr){const c=tr.firstElementChild;if(c)c.textContent=i+1}})
-  const frag=document.createDocumentFragment()
-  ordered.forEach(pdv=>{const tr=document.getElementById(`cr-${pdv.id}`);if(tr)frag.appendChild(tr)})
-  tbody.appendChild(frag)
-  // Mettre à jour les flèches de tri
-  const wrap=document.getElementById('comp-table-wrap')
-  if(wrap){wrap.querySelectorAll('th[onclick]').forEach(th=>{const c=th.getAttribute('onclick').match(/sortComparatif\('(.+?)'\)/)?.[1];if(c){const lbl=th.textContent.replace(/ [↑↓]$/,'');th.textContent=lbl+(c===col?(compSortAsc?' ↑':' ↓'):'')}})}
 }
 
 // ── CHANGE PERIOD ──────────────────────────────────────────────────────────
