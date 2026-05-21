@@ -94,3 +94,51 @@ Résultat : campagne Oct 2025 sans fin → couvre jusqu'à Mai 2026 ✅. Campagn
 `campEnd()` est appelée dans `yearMonths` (sélecteur dropdown) et dans `getFiltered` (filtre année et mois).
 
 > **Note :** si le cache `ads_max` d'un établissement est stale, les campagnes récentes peuvent manquer même après ce fix. Forcer un rechargement des données Meta si le sélecteur reste vide.
+
+---
+
+### Fix sélecteur mois récents — campagnes absentes du dropdown
+
+**Problème :** sur certains établissements (Étoile, Roquebrune), les mois récents (ex : avril–mai 2026) n'apparaissaient pas dans le sélecteur "Personnalisé" malgré des campagnes actives.
+
+Trois causes identifiées et corrigées en séquence :
+
+**1. Cache `ads_max` stale** — `ads_max` peut avoir été créé avant le lancement des campagnes récentes. `date_preset=maximum` de l'API Meta omet parfois les campagnes récentes sur certains comptes.
+- Remplacement de `date_preset=maximum` par un `time_range` explicite `2018 → aujourd'hui` (`9f4529d`)
+- Puis correction : la limite API Meta est 37 mois → passage à 36 mois glissants (`ce7a4d6`)
+
+**2. `ads_30d` exclu du sélecteur en mode `max`** — `renderDash` passait `ads_max` comme `data` ET `allData`, donc `ads_30d` (qui contient les campagnes récentes) n'était jamais fusionné dans le dropdown.
+- `renderAdsTab` lit désormais `ads_30d` directement depuis le cache et fusionne son contenu dans `sourceForSelect` (`5aaac66`)
+- Fallback dans `getFiltered` sur `ads_30d` quand `ads_max` est vide pour le mois/année demandé (`5e0761b`)
+
+**3. Bouton "Personnalisé" remplacé par un date range picker** — pour permettre de charger n'importe quelle période sans être limité par le cache existant.
+- Modale avec deux champs date (début / fin) + bouton Valider (`b4192a0`)
+- `loadAds` supporte le format `range:YYYY-MM-DD:YYYY-MM-DD` → appel API Meta direct avec `time_range` explicite
+- `renderDash` charge `ads_30d` en parallèle si absent du cache lors de l'ouverture du dashboard
+
+---
+
+### Comparatif global — refonte complète
+
+**Problème d'origine :** le comparatif existant calculait les données mois par mois (séquentiel, lent), stockait en Supabase avec une clé par mois, et `computeMonthMetrics` filtrait par `date_start` dans le mois — excluant les campagnes démarrées avant mais actives sur la période.
+
+**Refonte en trois temps :**
+
+**1. Nouveau flow UX** (`5fc7d13`)
+- Landing page : sélecteur d'année (3 dernières) puis multi-sélection de mois (max 12)
+- Chargement séquentiel par établissement avec spinner par ligne → données affichées au fur et à mesure
+- Colonnes triables à tout moment pendant le chargement
+
+**Architecture stockage deux niveaux :**
+- localStorage : cache 7 jours des données brutes Meta (clé `ads_range:since:until`)
+- Supabase `comparatif_mensuel` : résultats agrégés, clé période `"2026-01~2026-03"`
+- Un seul appel Meta par établissement pour toute la plage ; mois déjà en Supabase → aucun appel Meta
+
+**2. Données correctes par établissement** (`1115155`)
+- `computeRangeMetrics` remplace `computeMonthMetrics` : travaille directement sur les données retournées par l'API Meta (déjà filtrées par `time_range` + `page_id`), sans re-filtrer par `date_start`
+- Clé Supabase = période complète (`"2026-01~2026-03"`) au lieu de mois individuels — élimine les incohérences d'agrégation
+
+**3. Bouton "Recalculer"** (`1f55f55`)
+- Disponible dans le topbar (admin uniquement)
+- Supprime les entrées Supabase pour la période, vide le cache localStorage, re-fetch depuis Meta avec `force=true`
+- Résout les établissements (Orléans Sud/Fleury, Montargis, Chambray) dont les données Supabase avaient été calculées avec l'ancienne logique sans filtre `page_id`
