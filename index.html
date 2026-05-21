@@ -91,6 +91,9 @@ table.t td{padding:9px 8px;border-bottom:0.5px solid var(--bd);color:var(--tx);v
 table.t td.tal{text-align:left}
 table.t tr:last-child td{border-bottom:none}
 table.t tr:hover td{background:var(--bg3)}
+#comp-table-wrap table.t th:nth-child(-n+2),#comp-table-wrap table.t td:nth-child(-n+2){background:var(--bg3)}
+#comp-table-wrap table.t tr:hover td:nth-child(-n+2){background:var(--bg3)}
+#comp-table-wrap table.t th:nth-child(2),#comp-table-wrap table.t td:nth-child(2){border-right:1.5px solid var(--bd2)}
 .empty{font-size:13px;color:var(--tx2);padding:.5rem 0}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -1709,6 +1712,10 @@ function _metricsFromTypedRows(rows, nbMonths=1, includeActivite=true){
   const nb_pubs=rows.length
   const budget_total=rows.reduce((a,r)=>a+(parseFloat(r.spend)||0),0)
   const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
+  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return'fb';if(ol==='Trafic'||(r.campaign_name||'').toLowerCase().includes('instagram'))return'ig';return'fb+ig'}
+  const nb_fb=rows.filter(r=>getPlatform(r)==='fb').length
+  const nb_ig=rows.filter(r=>getPlatform(r)==='ig').length
+  const nb_fb_ig=rows.filter(r=>getPlatform(r)==='fb+ig').length
   const dRows=rows.filter(r=>{const d=r.date_start&&r.date_stop?Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000):null;return d!==null&&(DUREE_MIN_C[r._type]!==undefined||r._type==='Soirée')})
   const dVert=dRows.filter(r=>{const d=Math.round((new Date(r.date_stop)-new Date(r.date_start))/86400000);const ol=objMap[r.objective]||r.objective||'—';let min=DUREE_MIN_C[r._type];if(r._type==='Soirée')min=ol==='Événement'?14:5;return min!==undefined&&d>=min}).length
   const score_duree=dRows.length>0?dVert/dRows.length:null
@@ -1726,7 +1733,7 @@ function _metricsFromTypedRows(rows, nbMonths=1, includeActivite=true){
   const score_activite=includeActivite?Math.min(1,nb_pubs/(6*nbMonths)):null
   const scores=[score_duree,score_budget,score_objectif,score_activite].filter(s=>s!==null)
   const score_global=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:null
-  return{nb_pubs,budget_total,reach_total,score_duree,score_budget,score_objectif,score_activite,score_global}
+  return{nb_pubs,budget_total,reach_total,nb_fb,nb_ig,nb_fb_ig,score_duree,score_budget,score_objectif,score_activite,score_global}
 }
 
 // Point d'entrée public : type les données brutes, calcule les métriques globales
@@ -1826,11 +1833,9 @@ async function loadComparatifPeriode(selectedMonths, force=false){
 
   const si=col=>compSortCol===col?(compSortAsc?' ↑':' ↓'):''
   const th=(col,lbl)=>`<th onclick="sortComparatif('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${lbl}${si(col)}</th>`
-  const thBg='background:var(--bg3)'
-
   document.getElementById('main').innerHTML=`
     <div class="topbar">
-      <div style="display:flex;align-items:stretch;gap:12px">
+      <div style="display:flex;align-items:stretch;gap:24px">
         <div>
           <h1>Comparatif global</h1>
           <div style="font-size:12px;color:var(--tx2);margin-top:2px">${periodLabel}</div>
@@ -1841,17 +1846,18 @@ async function loadComparatifPeriode(selectedMonths, force=false){
     </div>
     <div id="comp-body" style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
       <div id="comp-type-bar" style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-primary" onclick="applyCompTypeFilter(null)">Tous</button>
+        <button class="btn btn-sm btn-primary" data-ctype="Tous" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">Tous</button>
       </div>
       <div class="card" id="comp-table-wrap">
         <div class="tbl-wrap"><table class="t">
           <thead><tr>
-            <th style="${thBg}">#</th><th style="${thBg}">Établissement</th>
+            <th>#</th><th>Établissement</th>
             ${th('nb_pubs','Pubs')}${th('budget_total','Budget')}${th('reach_total','Couverture')}
+            ${th('nb_fb','FB')}${th('nb_ig','IG')}${th('nb_fb_ig','FB+IG')}
             ${th('score_duree','Durée')}${th('score_budget','Budget cible')}${th('score_objectif','Objectif')}${th('score_activite','Activité')}${th('score_global','Score ★')}
           </tr></thead>
           <tbody id="comp-tbody">
-            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
+            ${pdvs.map((p,i)=>`<tr id="cr-${p.id}"><td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${p.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="color:var(--tx3)"><span class="spin"></span></td></tr>`).join('')}
           </tbody>
         </table></div>
       </div>
@@ -1883,13 +1889,13 @@ async function loadComparatifPeriode(selectedMonths, force=false){
         _compResults[pdv.id]=metriques
         if(tr) tr.outerHTML=compRowHtml(i,pdv,metriques)
       } else {
-        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
+        if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--tx3)">Aucune donnée sur la période</td>`
       }
       _compUpdateTypeBar()
     }catch(e){
       console.warn(`Comparatif ${pdv.nom}:`,e.message)
       const tr=document.getElementById(`cr-${pdv.id}`)
-      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--red)">Erreur</td>`
+      if(tr) tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--red)">Erreur</td>`
     }
   }
 }
@@ -1902,7 +1908,7 @@ function _compUpdateTypeBar(){
   const sorted=[...allTypes].sort()
   bar.innerHTML=['Tous',...sorted].map(t=>{
     const active=_compTypeFilter===null&&t==='Tous'||_compTypeFilter===t
-    return`<button class="btn btn-sm${active?' btn-primary':''}" onclick="applyCompTypeFilter(${t==='Tous'?'null':JSON.stringify(t)})">${t}</button>`
+    return`<button class="btn btn-sm${active?' btn-primary':''}" data-ctype="${t}" onclick="applyCompTypeFilter(this.dataset.ctype==='Tous'?null:this.dataset.ctype)">${t}</button>`
   }).join('')
 }
 
@@ -1921,7 +1927,7 @@ function applyCompTypeFilter(type){
     if(m){
       tr.outerHTML=compRowHtml(i,pdv,m)
     } else {
-      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600;background:var(--bg3)">${i+1}</td><td style="background:var(--bg3)"><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="8" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
+      tr.innerHTML=`<td style="color:var(--tx3);font-weight:600">${i+1}</td><td><strong>${pdv.nom.replace('My Beers ','')}</strong></td><td colspan="11" style="font-size:11px;color:var(--tx3)">Aucune pub de ce type</td>`
     }
   })
   sortComparatif(compSortCol)
@@ -1931,11 +1937,12 @@ function compRowHtml(rank,pdv,m){
   const sc=s=>(s==null)?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
   const sp=s=>(s==null)?'—':`${Math.round(s*100)}%`
   const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
-  const bg='background:var(--bg3)'
+  const nn=n=>(n==null)?'—':n
   return`<tr id="cr-${pdv.id}">
-    <td style="font-weight:600;color:var(--tx3);${bg}">${rank+1}</td>
-    <td style="${bg}"><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
+    <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
+    <td><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
+    <td>${nn(m.nb_fb)}</td><td>${nn(m.nb_ig)}</td><td>${nn(m.nb_fb_ig)}</td>
     <td style="color:${sc(m.score_duree)};font-weight:500">${sp(m.score_duree)}</td>
     <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
     <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
