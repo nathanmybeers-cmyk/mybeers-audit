@@ -1825,7 +1825,7 @@ async function recalculerManquants(){
   supaRows.forEach(r=>{supaByPdv[r.etablissement_id]=r.metriques})
   const pdvs=compCurrentData.pdvs||[]
   // Manquants = pas dans Supabase OU schéma ancien (pas de nb_facebook)
-  const manquants=pdvs.filter(p=>!supaByPdv[p.id]||supaByPdv[p.id].nb_facebook==null)
+  const manquants=pdvs.filter(p=>!supaByPdv[p.id]||supaByPdv[p.id].nb_facebook==null||supaByPdv[p.id].premiere_pub===undefined)
   if(!manquants.length){alert('Tous les établissements sont déjà à jour.');return}
   for(const pdv of manquants){
     try{await supabaseFetch(`comparatif_mensuel?mois=eq.${periodeKey}&etablissement_id=eq.${pdv.id}`,{method:'DELETE'})}catch(e){console.warn('Supabase delete:',e.message)}
@@ -1894,10 +1894,17 @@ async function loadComparatifPeriode(selectedMonths, force=false){
       let metriques=supaByPdv[pdv.id]||null
       if(!metriques){
         // force=true : contourne aussi le cache localStorage pour des données fraîches
-        const rangeData=await loadAds(pdv,force,`range:${since}:${until}`)
+        const [rangeData,maxData]=await Promise.all([
+          loadAds(pdv,force,`range:${since}:${until}`),
+          loadAds(pdv,false,'max')
+        ])
         if(rangeData&&Array.isArray(rangeData)&&!rangeData.error){
           metriques=computeRangeMetrics(rangeData)
-          if(metriques&&currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
+          if(metriques){
+            const srcMax=Array.isArray(maxData)&&!maxData?.error?maxData:rangeData
+            metriques.premiere_pub=srcMax.filter(r=>r.date_start).map(r=>r.date_start).sort()[0]||null
+            if(currentRole==='admin') saveComparatifEntry(pdv.id,periodeKey,metriques).catch(()=>{})
+          }
         }
       }
       const tr=document.getElementById(`cr-${pdv.id}`)
@@ -1961,9 +1968,11 @@ function compRowHtml(rank,pdv,m){
   const sc=s=>(s==null)?'var(--tx3)':s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)'
   const sp=s=>(s==null)?'—':`${Math.round(s*100)}%`
   const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:String(Math.round(n))
+  const pp=m.premiere_pub||_compResults[pdv.id]?.premiere_pub||null
+  const ppHtml=pp?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">Depuis ${new Date(pp+'T12:00:00').toLocaleDateString('fr-FR',{month:'short',year:'numeric'})}</div>`:''
   return`<tr id="cr-${pdv.id}">
     <td style="font-weight:600;color:var(--tx3)">${rank+1}</td>
-    <td><strong>${pdv.nom.replace('My Beers ','')}</strong></td>
+    <td><strong>${pdv.nom.replace('My Beers ','')}</strong>${ppHtml}</td>
     <td>${m.nb_pubs}</td><td>${Math.round(m.budget_total)} €</td><td>${fmtK(m.reach_total)}</td>
     <td style="background:var(--blue-bg);color:var(--blue-tx);font-weight:600">${m.nb_facebook||'—'}</td>
     <td style="background:var(--pink-bg);color:var(--pink-tx);font-weight:600">${m.nb_instagram||'—'}</td>
