@@ -264,18 +264,20 @@ async function exportPDF(pdvId) {
   doc.setFontSize(10)
   doc.text('Rapport Réseaux Sociaux', 14, 20)
 
-  // Nom de l'établissement (droite)
+  // Nom de l'établissement (droite) — positionnement explicite pour éviter le débordement
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text(pdv.nom, W - 14, 12, { align: 'right' })
+  doc.text(pdv.nom, W - 14 - doc.getTextWidth(pdv.nom), 12)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  doc.text(`Période : ${periodLabel}`, W - 14, 20, { align: 'right' })
+  const pLabel = `Période : ${periodLabel}`
+  doc.text(pLabel, W - 14 - doc.getTextWidth(pLabel), 20)
 
   // Date génération
   doc.setTextColor(...GREY)
   doc.setFontSize(8)
-  doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'})}`, W - 14, 26, { align: 'right' })
+  const genLabel = `Généré le ${new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'})}`
+  doc.text(genLabel, W - 14 - doc.getTextWidth(genLabel), 26)
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const objMap={'OUTCOME_ENGAGEMENT':'Interaction','OUTCOME_AWARENESS':'Notoriété','LINK_CLICKS':'Trafic','OUTCOME_TRAFFIC':'Trafic','MESSAGES':'Messages','REACH':'Couverture','EVENT_RESPONSES':'Événement'}
