@@ -228,7 +228,9 @@ async function exportPDF(pdvId) {
   const filtered = getFiltered(ads30, adsAll || ads30)
   if (!filtered || !filtered.length) { alert('Aucune donnée à exporter pour cette période.'); return }
 
-  const rows = computeTypes(filtered)
+  const allRows = computeTypes(filtered)
+  const rows = currentTypeFilter ? allRows.filter(r => r._type === currentTypeFilter) : allRows
+  if (!rows.length) { alert('Aucune donnée à exporter pour ce filtre.'); return }
 
   const { jsPDF } = window.jspdf
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -269,9 +271,18 @@ async function exportPDF(pdvId) {
   doc.setFontSize(16)
   doc.text(pdv.nom, W - 14 - doc.getTextWidth(pdv.nom), 12)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const pLabel = `Période : ${periodLabel}`
-  doc.text(pLabel, W - 14 - doc.getTextWidth(pLabel), 20)
+  if(isRangePeriod) {
+    const rp = currentPeriod.split(':')
+    const fmtRD = d => new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})
+    doc.setFontSize(9)
+    const l1 = `Du ${fmtRD(rp[1])}`, l2 = `au ${fmtRD(rp[2])}`
+    doc.text(l1, W - 14 - doc.getTextWidth(l1), 18)
+    doc.text(l2, W - 14 - doc.getTextWidth(l2), 23)
+  } else {
+    doc.setFontSize(10)
+    const pLabel = `Période : ${periodLabel}`
+    doc.text(pLabel, W - 14 - doc.getTextWidth(pLabel), 20)
+  }
 
   // Date génération
   doc.setTextColor(...GREY)
