@@ -222,8 +222,9 @@ async function exportPDF(pdvId) {
   const pdv = cfg.find(p => p.id === pdvId)
   if (!pdv) return
 
+  const isRangePeriod = currentPeriod.startsWith('range:')
   const ads30 = DB.getCache(pdvId, 'ads_30d')
-  const adsAll = DB.getCache(pdvId, 'ads_max')
+  const adsAll = isRangePeriod ? DB.getCache(pdvId, 'ads_' + currentPeriod) : DB.getCache(pdvId, 'ads_max')
   const filtered = getFiltered(ads30, adsAll || ads30)
   if (!filtered || !filtered.length) { alert('Aucune donnée à exporter pour cette période.'); return }
 
