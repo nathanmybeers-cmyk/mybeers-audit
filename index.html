@@ -472,7 +472,8 @@ async function exportPDF(pdvId) {
     else if(isIG) plat = 'Instagram'
     else if(r._type === 'Soirée') {
       const g = platSoireeMapPDF[`${r._type}_${r.date_stop}`]
-      if(g && g.length === 2) {
+      if(g && g.length === 1) plat = 'Insta+FB'
+      else if(g && g.length === 2) {
         const s = [...g].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
         plat = s[0].id === r.campaign_id ? 'Instagram' : 'Facebook'
       } else plat = 'Facebook'
@@ -1546,7 +1547,12 @@ function renderAdsTab(data, pdv, allData) {
       platBadge = `<span class="badge bpi">Instagram</span>`
     } else if(type === 'Soirée') {
       const g = soireeNonEventMap[platKey]
-      if(g && g.length === 2) {
+      if(g && g.length === 1) {
+        platBadge = `<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:500">
+          <span style="background:var(--pink-bg);color:var(--pink-tx);padding:2px 6px">Insta</span>
+          <span style="background:var(--blue-bg);color:var(--blue-tx);padding:2px 6px">FB</span>
+        </span>`
+      } else if(g && g.length === 2) {
         const s = [...g].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
         platBadge = s[0].id === r.campaign_id
           ? `<span class="badge bpi">Instagram</span>`
@@ -1774,7 +1780,7 @@ function _metricsFromTypedRows(rows){
   rows.forEach(r=>{const key=`${r._type}_${r.date_stop}`;if(!platGroupMap[key])platGroupMap[key]=[];platGroupMap[key].push(r.campaign_id)})
   const soireeNonEventMapC={}
   rows.forEach(r=>{if(r._type!=='Soirée')return;const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return;const key=`${r._type}_${r.date_stop}`;if(!soireeNonEventMapC[key])soireeNonEventMapC[key]=[];soireeNonEventMapC[key].push({id:r.campaign_id,reach:parseInt(r.reach)||0})})
-  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeNonEventMapC[`${r._type}_${r.date_stop}`];if(g&&g.length===2){const s=[...g].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
+  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeNonEventMapC[`${r._type}_${r.date_stop}`];if(g&&g.length===1)return'insta_fb';if(g&&g.length===2){const s=[...g].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
   const nb_facebook=rows.filter(r=>getPlatform(r)==='facebook').length
   const nb_instagram=rows.filter(r=>getPlatform(r)==='instagram').length
   const nb_insta_fb=rows.filter(r=>getPlatform(r)==='insta_fb').length
