@@ -452,14 +452,19 @@ async function exportPDF(pdvId) {
     return name.substring(0,45)||'-'
   }
 
-  const platSoireeMapPDF = {}
+  const soireeGroupMapPDF = {}
   rows.forEach(r => {
     if(r._type !== 'Soirée') return
     const ol = objMap[r.objective]||r.objective||'—'
     if(ol === 'Événement') return
     const key = `${r._type}_${r.date_stop}`
-    if(!platSoireeMapPDF[key]) platSoireeMapPDF[key] = []
-    platSoireeMapPDF[key].push({id: r.campaign_id, reach: parseInt(r.reach)||0})
+    if(!soireeGroupMapPDF[key]) soireeGroupMapPDF[key] = {hasInstagram: false, remaining: []}
+    const isIGr = (r.campaign_name||'').toLowerCase().includes('instagram')
+    if(ol === 'Trafic' || isIGr) {
+      soireeGroupMapPDF[key].hasInstagram = true
+    } else {
+      soireeGroupMapPDF[key].remaining.push({id: r.campaign_id, reach: parseInt(r.reach)||0})
+    }
   })
 
   const tableData = rows.map(r => {
@@ -471,10 +476,11 @@ async function exportPDF(pdvId) {
     else if(ol_plat === 'Trafic') plat = 'Instagram'
     else if(isIG) plat = 'Instagram'
     else if(r._type === 'Soirée') {
-      const g = platSoireeMapPDF[`${r._type}_${r.date_stop}`]
-      if(g && g.length === 1) plat = 'Insta+FB'
-      else if(g && g.length === 2) {
-        const s = [...g].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
+      const g = soireeGroupMapPDF[`${r._type}_${r.date_stop}`]
+      if(g && g.hasInstagram) plat = 'Facebook'
+      else if(g && g.remaining.length === 1) plat = 'Insta+FB'
+      else if(g && g.remaining.length === 2) {
+        const s = [...g.remaining].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
         plat = s[0].id === r.campaign_id ? 'Instagram' : 'Facebook'
       } else plat = 'Facebook'
     } else plat = 'Facebook'
@@ -1485,14 +1491,20 @@ function renderAdsTab(data, pdv, allData) {
   })
 
   // Pour Soirée à 2 campagnes non-Événement : la moins couverte → Instagram
-  const soireeNonEventMap = {}
+  // Pour Soirée : séparer les campagnes déjà Instagram (Trafic/isIG) des autres non-Événement
+  const soireeGroupMap = {}
   rows.forEach(r => {
     if(r._type !== 'Soirée') return
     const ol = objMap[r.objective]||r.objective||'—'
     if(ol === 'Événement') return
     const key = `${r._type}_${r.date_stop}`
-    if(!soireeNonEventMap[key]) soireeNonEventMap[key] = []
-    soireeNonEventMap[key].push({id: r.campaign_id, reach: parseInt(r.reach)||0})
+    if(!soireeGroupMap[key]) soireeGroupMap[key] = {hasInstagram: false, remaining: []}
+    const isIGr = (r.campaign_name||'').toLowerCase().includes('instagram')
+    if(ol === 'Trafic' || isIGr) {
+      soireeGroupMap[key].hasInstagram = true
+    } else {
+      soireeGroupMap[key].remaining.push({id: r.campaign_id, reach: parseInt(r.reach)||0})
+    }
   })
 
   const tableRows = rows.map(r=>{
@@ -1546,14 +1558,16 @@ function renderAdsTab(data, pdv, allData) {
     } else if(isIG) {
       platBadge = `<span class="badge bpi">Instagram</span>`
     } else if(type === 'Soirée') {
-      const g = soireeNonEventMap[platKey]
-      if(g && g.length === 1) {
+      const g = soireeGroupMap[platKey]
+      if(g && g.hasInstagram) {
+        platBadge = `<span class="badge bb">Facebook</span>`
+      } else if(g && g.remaining.length === 1) {
         platBadge = `<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:500">
           <span style="background:var(--pink-bg);color:var(--pink-tx);padding:2px 6px">Insta</span>
           <span style="background:var(--blue-bg);color:var(--blue-tx);padding:2px 6px">FB</span>
         </span>`
-      } else if(g && g.length === 2) {
-        const s = [...g].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
+      } else if(g && g.remaining.length === 2) {
+        const s = [...g.remaining].sort((a,b) => a.reach-b.reach||a.id.localeCompare(b.id))
         platBadge = s[0].id === r.campaign_id
           ? `<span class="badge bpi">Instagram</span>`
           : `<span class="badge bb">Facebook</span>`
@@ -1778,9 +1792,9 @@ function _metricsFromTypedRows(rows){
   const reach_total=rows.reduce((a,r)=>a+(parseInt(r.reach)||0),0)
   const platGroupMap={}
   rows.forEach(r=>{const key=`${r._type}_${r.date_stop}`;if(!platGroupMap[key])platGroupMap[key]=[];platGroupMap[key].push(r.campaign_id)})
-  const soireeNonEventMapC={}
-  rows.forEach(r=>{if(r._type!=='Soirée')return;const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return;const key=`${r._type}_${r.date_stop}`;if(!soireeNonEventMapC[key])soireeNonEventMapC[key]=[];soireeNonEventMapC[key].push({id:r.campaign_id,reach:parseInt(r.reach)||0})})
-  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeNonEventMapC[`${r._type}_${r.date_stop}`];if(g&&g.length===1)return'insta_fb';if(g&&g.length===2){const s=[...g].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
+  const soireeGroupMapC={}
+  rows.forEach(r=>{if(r._type!=='Soirée')return;const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return;const key=`${r._type}_${r.date_stop}`;if(!soireeGroupMapC[key])soireeGroupMapC[key]={hasInstagram:false,remaining:[]};const isIGr=(r.campaign_name||'').toLowerCase().includes('instagram');if(ol==='Trafic'||isIGr){soireeGroupMapC[key].hasInstagram=true}else{soireeGroupMapC[key].remaining.push({id:r.campaign_id,reach:parseInt(r.reach)||0})}})
+  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeGroupMapC[`${r._type}_${r.date_stop}`];if(g&&g.hasInstagram)return'facebook';if(g&&g.remaining.length===1)return'insta_fb';if(g&&g.remaining.length===2){const s=[...g.remaining].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
   const nb_facebook=rows.filter(r=>getPlatform(r)==='facebook').length
   const nb_instagram=rows.filter(r=>getPlatform(r)==='instagram').length
   const nb_insta_fb=rows.filter(r=>getPlatform(r)==='insta_fb').length
