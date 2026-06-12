@@ -1,0 +1,11 @@
+# Secrets — ne jamais pousser (tout fichier du repo est servi publiquement par Vercel)
+client_secret_*.json
+token_gmb.json
+
+# Fichiers de travail locaux
+.playwright-mcp/
+*.png
+test_gmb.py
+SPEC_MYBEERS_OFFICIEL.md
+TOKENS_PROCESS.txt
+supabase_officiel.sql

@@ -19,6 +19,7 @@
   --blue:#378ADD;--blue-bg:#E6F1FB;--blue-tx:#0C447C;
   --purple:#7F77DD;--purple-bg:#EEEDFE;--purple-tx:#3C3489;
   --pink:#D4537E;--pink-bg:#FBEAF0;--pink-tx:#72243E;
+  --orchid:#B45BC0;--orchid-bg:#F8F0FA;--orchid-tx:#6E2F7E;
   --r:8px;--rl:12px;
 }
 @media(prefers-color-scheme:dark){:root{
@@ -27,6 +28,7 @@
   --green-bg:#0a3a3a;--green-tx:#7FD9D9;--amber-bg:#633806;--amber-tx:#FAC775;
   --red-bg:#501313;--red-tx:#F7C1C1;--blue-bg:#042C53;--blue-tx:#B5D4F4;
   --purple-bg:#26215C;--purple-tx:#CECBF6;--pink-bg:#4B1528;--pink-tx:#F4C0D1;
+  --orchid-bg:#3D1F44;--orchid-tx:#EBCBF0;
 }}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
 
@@ -102,6 +104,15 @@ table.t tr:hover td{background:var(--bg3)}
 .info-box{background:var(--blue-bg);color:var(--blue-tx);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;line-height:1.6}
 .warn-box{background:var(--amber-bg);color:var(--amber-tx);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;line-height:1.6}
 .chart-wrap{position:relative;width:100%}
+/* MY BEERS OFFICIEL — couleurs par plateforme */
+.tab.tab-ig.active{background:var(--orchid-bg);color:var(--orchid-tx);border-color:var(--orchid);font-weight:600}
+.tab.tab-fb.active{background:var(--blue-bg);color:var(--blue-tx);border-color:var(--blue);font-weight:600}
+.off-ig .kc{background:var(--orchid-bg)}
+.off-ig .card{border-color:color-mix(in srgb, var(--orchid) 25%, var(--bd))}
+.off-ig .ct{color:var(--orchid-tx)}
+.off-fb .kc{background:var(--blue-bg)}
+.off-fb .card{border-color:color-mix(in srgb, var(--blue) 30%, var(--bd))}
+.off-fb .ct{color:var(--blue-tx)}
 .token-field{font-family:monospace;font-size:11px}
 .logout-btn{font-size:11px;color:var(--tx3);cursor:pointer;padding:3px 7px;border-radius:var(--r);border:0.5px solid var(--bd)}
 .logout-btn:hover{background:var(--bg3)}
@@ -179,8 +190,9 @@ table.t tr:hover td{background:var(--bg3)}
     <div class="ns">Navigation</div>
     <div class="ni active" data-v="accueil">Accueil</div>
     <div class="ni" data-v="comparatif">Comparatif global</div>
+    <div class="ni" data-v="officiel" id="nav-officiel">My Beers Officiel</div>
     <div class="ni" data-v="config" id="nav-config">Gérer les établissements</div>
-    <div class="ns">Établissements</div>
+    <div class="ns" id="ns-etabs">Établissements</div>
     <div id="pdv-list"></div>
   </div>
   <div class="main" id="main"></div>
@@ -190,7 +202,8 @@ table.t tr:hover td{background:var(--bg3)}
 // ── AUTH ───────────────────────────────────────────────────────────────────
 const USERS = {
   'admin':     { pass: 'MyBeers2025!', role: 'admin' },
-  'animateur': { pass: 'Anim2025#',    role: 'animateur' }
+  'animateur': { pass: 'Anim2025#',    role: 'animateur' },
+  'community': { pass: 'CM2026$',      role: 'cm' } // accès limité à l'onglet My Beers Officiel
 }
 
 let currentRole = null
@@ -608,10 +621,24 @@ let sheetConfig = null
 async function showApp() {
   document.getElementById('login-wrap').style.display='none'
   document.getElementById('app').style.display='flex'
-  document.getElementById('role-label').textContent = currentRole === 'admin' ? 'Admin' : 'Animateur'
+  const isCM = currentRole === 'cm'
+  document.getElementById('role-label').textContent = currentRole === 'admin' ? 'Admin' : isCM ? 'Community Manager' : 'Animateur'
   const cfgNav = document.getElementById('nav-config')
   if(currentRole !== 'admin') cfgNav.style.display='none'
   else cfgNav.style.display='block'
+  const offNav = document.getElementById('nav-officiel')
+  if(offNav) offNav.style.display = (currentRole === 'admin' || isCM) ? 'block' : 'none'
+  // Community Manager : uniquement l'onglet My Beers Officiel
+  document.querySelectorAll('.ni[data-v="accueil"],.ni[data-v="comparatif"]').forEach(e => e.style.display = isCM ? 'none' : 'block')
+  const nsEtabs = document.getElementById('ns-etabs')
+  if(nsEtabs) nsEtabs.style.display = isCM ? 'none' : 'block'
+  document.getElementById('pdv-list').style.display = isCM ? 'none' : 'block'
+  if(isCM){
+    document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.toggle('active', e.dataset.v==='officiel'))
+    setMobTitle('My Beers Officiel')
+    renderOfficiel()
+    return
+  }
 
   document.getElementById('pdv-list').innerHTML = '<div style="font-size:11px;color:var(--tx3);padding:6px 10px">Chargement...</div>'
   const fromSupabase = await loadConfigFromSupabase()
@@ -660,7 +687,7 @@ const TYPE_DEFS = [
   {label:'Apéro Concert', keys:['apéro concert','apero concert','concert','🎸']},
   {label:'Beer Pong',     keys:['beer pong','pong','championnat','🏓']},
   {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl','🎯']},
-  {label:'Karaoke',       keys:['karaoké','karaoke','🎤']},
+  {label:'Karaoke',       keys:['karaoké','karaoke']},
   {label:'SBK',           keys:['sbk']},
   {label:'Soirée',        keys:['open dj set','dj set','full moon','ground room session','craquage','opening']},
   {label:'Crush',         keys:['crush','célib','celib','célibataire','celibataire']},
@@ -721,6 +748,10 @@ function computeTypes(rows) {
     const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
+    }
+    // Règle mardi : Karaoke détecté sans le mot "karaoké/karaoke" (ex : via emoji) → Apéro Quiz
+    if(isTuesday && type === 'Karaoke' && !n.includes('karaoké') && !n.includes('karaoke')) {
+      type = 'Apéro Quiz'
     }
     // Règles émoji/mot-clé en fallback (Divers ou Soirée par défaut, sauf si objectif Événement)
     if(!found && (type === 'Divers' || type === 'Soirée') && r.objective !== 'EVENT_RESPONSES') {
@@ -819,14 +850,17 @@ function setMobTitle(title) {
   if(el) el.textContent = title
 }
 function nav(v) {
+  if(currentRole === 'cm' && v !== 'officiel') return
   if(window.innerWidth <= 768) closeSidebar()
   document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.toggle('active',e.dataset.v===v))
   document.querySelectorAll('.pdv-item').forEach(e=>e.classList.remove('active'))
   if(v==='accueil'){ setMobTitle('Tableau de bord'); renderAccueil() }
   else if(v==='comparatif'){ setMobTitle('Comparatif global'); renderComparatif() }
+  else if(v==='officiel'){ setMobTitle('My Beers Officiel'); renderOfficiel() }
   else if(v==='config'){ setMobTitle('Établissements'); renderConfig() }
 }
 function navPDV(id) {
+  if(currentRole === 'cm') return
   if(window.innerWidth <= 768) closeSidebar()
   currentTypeFilter = null
   document.querySelectorAll('.ni[data-v]').forEach(e=>e.classList.remove('active'))
@@ -2063,11 +2097,517 @@ function compRowHtml(rank,pdv,m){
   </tr>`
 }
 
+// ── MY BEERS OFFICIEL ──────────────────────────────────────────────────────
+const OFFICIEL = {
+  ig_id: '17841404898044561',
+  fb_page_id: '549210655145512',
+  ad_account_id: 'act_32295533',
+  // Token utilisateur longue durée (n'expire jamais) — Instagram + compte publicitaire
+  token: 'EAAhh68plyWgBRQD6rZCxOuR1CG73xJZCc4kytiFs4klvIRrjmpA21GjkEN2ZBtuZBbtreIDSXm3EhX6nZBIrcCplZB3GD1wKk9kMNLvEnPpSgrzBbLpiI7hZAZAuZCFdELs3716yGeEstO9PXZAU91tIxgG0vQWS7AGXkNWoQc8IMED9nzWZBrwyM0ftvsRSMEh0CWuPIzdHBilT7Hkkr76',
+  // Token de page (n'expire jamais) — requis pour les stats organiques Facebook
+  page_token: 'EAAhh68plyWgBRgvnZBIVrrHWDGYRAooYiBqZBBSNu5XTqZABUrYCEJrQZCWutw08Fa1IIHXxdx7gyLQ0mlDatPFFB69X0GOuhSfhakXZAO5uyqb7aTwagCoZCWPVDZAIHttPkGWeTV2rGOKH1PuG9Rg3sWE7bSHwvhdIf2sbV7WRoSHWk440LygEqs4AnUxVvcO716f9n0BT4j3CyFhPZC5pvMdN'
+}
+
+let officielPlatform = localStorage.getItem('rsf_off_platform') || 'instagram'
+
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+const escHtml = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+const officielNext = d => d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+const fmtEur = n => (isNaN(n)||!isFinite(n)||n===0) ? '—' : n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'
+
+// Période sélectionnée → bornes {since, until}
+function officielRange() {
+  const today = new Date()
+  const cap = d => d > today ? today : d
+  if(currentPeriod === 'max'){ const s=new Date(today); s.setMonth(s.getMonth()-24); s.setDate(s.getDate()+7); return {since: isoLocal(s), until: isoLocal(today)} }
+  if(currentPeriod.startsWith('range:')){ const p=currentPeriod.split(':'); return {since: p[1], until: isoLocal(cap(new Date(p[2]+'T12:00:00')))} }
+  if(currentPeriod.startsWith('year-')){ const y=parseInt(currentPeriod.replace('year-','')); return {since: `${y}-01-01`, until: isoLocal(cap(new Date(y,11,31,12)))} }
+  if(currentPeriod !== '30d' && currentPeriod.includes('-')){ const [fy,fm]=currentPeriod.split('-').map(Number); return {since: isoLocal(new Date(fy,fm,1,12)), until: isoLocal(cap(new Date(fy,fm+1,0,12)))} }
+  const s = new Date(today); s.setDate(s.getDate()-29)
+  return {since: isoLocal(s), until: isoLocal(today)}
+}
+
+// L'API Meta limite les insights de compte/page à des fenêtres de 30 jours → découpage
+function officielChunks(since, until) {
+  const out = []
+  let s = new Date(since+'T12:00:00')
+  const end = new Date(until+'T12:00:00')
+  while(s <= end){
+    const e = new Date(s); e.setDate(e.getDate()+29)
+    const ce = e > end ? end : e
+    out.push({since: isoLocal(s), until: isoLocal(ce)})
+    s = new Date(ce); s.setDate(s.getDate()+1)
+  }
+  return out
+}
+
+// ── Officiel : données publicitaires scindées par plateforme ───────────────
+// audience_network et messenger (montants marginaux) sont rattachés à Facebook
+async function officielAdsSplit(since, until) {
+  const tr = encodeURIComponent(`{"since":"${since}","until":"${until}"}`)
+  const platOf = r => r.publisher_platform === 'instagram' ? 'instagram' : 'facebook'
+  const mk = () => ({spend:0, reach:0, engagement:0, sponsoredFollows:0, visits:0, nbAds:0, nbContents:0})
+  const out = {instagram: mk(), facebook: mk(), err: null}
+  try {
+    const acc = await fetchMeta(`${OFFICIEL.ad_account_id}/insights?fields=spend,reach,actions&breakdowns=publisher_platform&level=account&time_range=${tr}`, OFFICIEL.token)
+    ;(acc.data||[]).forEach(r => {
+      const o = out[platOf(r)]
+      o.spend += parseFloat(r.spend)||0
+      o.reach += parseInt(r.reach)||0
+      o.engagement += getAction(r.actions,'post_engagement')
+      o.sponsoredFollows += getAction(r.actions,'like') + getAction(r.actions,'follow')
+    })
+    // Visites sponsorisées = clics de lien des campagnes Trafic (elles pointent vers le profil)
+    try {
+      const camp = await fetchMeta(`${OFFICIEL.ad_account_id}/insights?fields=campaign_name,objective,actions&breakdowns=publisher_platform&level=campaign&time_range=${tr}&limit=400`, OFFICIEL.token)
+      ;(camp.data||[]).forEach(c => { if(['LINK_CLICKS','OUTCOME_TRAFFIC'].includes(c.objective)) out[platOf(c)].visits += getAction(c.actions,'link_click') })
+    } catch(e) { console.warn('[officiel] ads campaigns:', e.message) }
+    // Comptage des publicités et des contenus (dédoublonnés par nom, suffixe plateforme retiré)
+    let rows = [], url = `${OFFICIEL.ad_account_id}/insights?fields=ad_id,ad_name,spend&breakdowns=publisher_platform&level=ad&time_range=${tr}&limit=300`
+    while(url){
+      const d = await fetchMeta(url, OFFICIEL.token)
+      rows = rows.concat(d.data||[])
+      url = officielNext(d)
+      if(rows.length > 4000) break
+    }
+    const perAd = {}
+    rows.forEach(r => {
+      const s = parseFloat(r.spend)||0
+      if(s <= 0) return
+      const a = perAd[r.ad_id] = perAd[r.ad_id] || {name: r.ad_name||'', instagram: 0, facebook: 0}
+      a[platOf(r)] += s
+    })
+    // Une pub est comptée sur la plateforme de la PUBLICATION qu'elle met en avant :
+    // source_instagram_media_id présent → boost d'un post Instagram, sinon post Facebook.
+    // (validé : 211/211 pubs classées sans ambiguïté sur 12 mois)
+    const adIds = Object.keys(perAd)
+    const adPlat = {}
+    for(let i=0; i<adIds.length; i+=50){
+      const batch = adIds.slice(i, i+50)
+      try {
+        const d = await fetchMeta(`?ids=${batch.join(',')}&fields=creative{source_instagram_media_id,effective_object_story_id}`, OFFICIEL.token)
+        batch.forEach(id => {
+          const c = (d[id]||{}).creative || {}
+          if(c.source_instagram_media_id) adPlat[id] = 'instagram'
+          else if(c.effective_object_story_id) adPlat[id] = 'facebook'
+        })
+      } catch(e) { console.warn('[officiel] créatifs pubs:', e.message) }
+    }
+    const contSeen = {instagram: new Set(), facebook: new Set()}
+    Object.entries(perAd).forEach(([id, a]) => {
+      // repli si le créatif est illisible : dépense majoritaire, puis nom
+      const p = adPlat[id] || (a.instagram > a.facebook ? 'instagram'
+              : a.facebook > a.instagram ? 'facebook'
+              : (/instagram|insta|\big\b/i.test(a.name) ? 'instagram' : 'facebook'))
+      out[p].nbAds++
+      contSeen[p].add(a.name.replace(/\((facebook|instagram|insta|fb|ig)\)/gi,'').replace(/\s+/g,' ').trim().toLowerCase())
+    })
+    ;['instagram','facebook'].forEach(p => { out[p].nbContents = contSeen[p].size || out[p].nbAds })
+  } catch(e) { out.err = e.message }
+  return out
+}
+
+// ── Officiel : organique Instagram ──────────────────────────────────────────
+async function officielIgTotals(since, until) {
+  try {
+    const d = await fetchMeta(`${OFFICIEL.ig_id}/insights?metric=reach,total_interactions,profile_views&period=day&metric_type=total_value&since=${since}&until=${until}`, OFFICIEL.token)
+    const g = n => { const m=(d.data||[]).find(x=>x.name===n); return m?.total_value?.value||0 }
+    return {reach: g('reach'), interactions: g('total_interactions'), profile_views: g('profile_views')}
+  } catch(e) { console.warn('[officiel] ig totals', since, e.message); return {reach:0, interactions:0, profile_views:0} }
+}
+
+async function officielIgFollows(since, until) {
+  try {
+    const d = await fetchMeta(`${OFFICIEL.ig_id}/insights?metric=follows_and_unfollows&period=day&metric_type=total_value&breakdown=follow_type&since=${since}&until=${until}`, OFFICIEL.token)
+    const res = d.data?.[0]?.total_value?.breakdowns?.[0]?.results || []
+    const g = k => { const r = res.find(x=>x.dimension_values?.[0]===k); return r ? (parseInt(r.value)||0) : 0 }
+    return {follows: g('FOLLOWER'), unfollows: g('NON_FOLLOWER')}
+  } catch(e) { console.warn('[officiel] ig follows', since, e.message); return {follows:0, unfollows:0} }
+}
+
+async function officielMediaList(since, until) {
+  const sinceT = new Date(since+'T00:00:00').getTime()
+  const untilT = new Date(until+'T23:59:59').getTime()
+  let media = [], url = `${OFFICIEL.ig_id}/media?fields=id,timestamp,media_type,media_product_type,caption,permalink,thumbnail_url,media_url,like_count,comments_count&limit=50`
+  while(url){
+    const d = await fetchMeta(url, OFFICIEL.token)
+    const items = d.data||[]
+    items.forEach(m => { const t = new Date(m.timestamp).getTime(); if(t>=sinceT && t<=untilT) media.push(m) })
+    const oldest = items.length ? new Date(items[items.length-1].timestamp).getTime() : 0
+    if(!items.length || oldest < sinceT) break
+    url = officielNext(d)
+    if(media.length > 600) break
+  }
+  return media
+}
+
+// Insights par contenu — `follows` et `profile_visits` n'existent que sur les posts FEED
+async function officielMediaInsights(media, onProgress) {
+  const MAXM = 250
+  const list = media.slice(0, MAXM)
+  const rows = []
+  for(let i=0; i<list.length; i+=10){
+    const batch = list.slice(i, i+10)
+    await Promise.all(batch.map(async m => {
+      const isFeed = m.media_product_type === 'FEED'
+      const tiers = [
+        isFeed ? 'reach,total_interactions,likes,comments,shares,saved,views,follows,profile_visits' : 'reach,total_interactions,likes,comments,shares,saved,views',
+        'reach,total_interactions,likes,comments,shares,saved',
+        'reach,total_interactions'
+      ]
+      let ins = null
+      for(const metrics of tiers){
+        try {
+          const d = await fetchMeta(`${m.id}/insights?metric=${metrics}`, OFFICIEL.token)
+          ins = {}
+          ;(d.data||[]).forEach(x => { ins[x.name] = x.values?.[0]?.value||0 })
+          break
+        } catch(e) { /* essai suivant avec moins de métriques */ }
+      }
+      ins = ins || {}
+      rows.push({
+        id: m.id, date: m.timestamp, type: m.media_product_type==='REELS' ? 'Reel' : (m.media_type==='CAROUSEL_ALBUM' ? 'Carrousel' : (m.media_type==='VIDEO' ? 'Vidéo' : 'Photo')),
+        caption: (m.caption||'').slice(0,90), permalink: m.permalink||'', thumb: m.thumbnail_url || m.media_url || '',
+        reach: ins.reach||0, views: ins.views??null,
+        likes: ins.likes ?? m.like_count ?? 0, comments: ins.comments ?? m.comments_count ?? 0,
+        shares: ins.shares??null, saved: ins.saved??null,
+        interactions: ins.total_interactions||0,
+        follows: (m.media_product_type==='FEED' && ins.follows!==undefined) ? ins.follows : null
+      })
+    }))
+    if(onProgress) onProgress(Math.min(i+10, list.length), list.length)
+  }
+  rows.sort((a,b) => b.date.localeCompare(a.date))
+  const sum = k => rows.reduce((a,r) => a + (r[k]||0), 0)
+  return {rows, reach: sum('reach'), interactions: sum('interactions'), follows: sum('follows'), analyzed: rows.length, truncated: media.length > MAXM}
+}
+
+async function loadOfficielInstagram(since, until, prog) {
+  const chunks = officielChunks(since, until)
+  const acc = {reach:0, interactions:0, profile_views:0}, fol = {follows:0, unfollows:0}
+  for(let i=0; i<chunks.length; i++){
+    prog(`Statistiques du compte Instagram… (${i+1}/${chunks.length})`)
+    const [t, f] = await Promise.all([officielIgTotals(chunks[i].since, chunks[i].until), officielIgFollows(chunks[i].since, chunks[i].until)])
+    acc.reach += t.reach; acc.interactions += t.interactions; acc.profile_views += t.profile_views
+    fol.follows += f.follows; fol.unfollows += f.unfollows
+  }
+  prog('Liste des contenus publiés…')
+  const media = await officielMediaList(since, until)
+  const organic = await officielMediaInsights(media, (done, total) => prog(`Analyse des contenus… (${done}/${total})`))
+  const info = await fetchMeta(`${OFFICIEL.ig_id}?fields=followers_count,username`, OFFICIEL.token)
+  return {account: acc, fol, nbMedia: media.length, organic, followers: info.followers_count, username: info.username}
+}
+
+// ── Officiel : organique Facebook (token de page requis) ───────────────────
+async function officielFbPageTotals(since, until) {
+  try {
+    const d = await fetchMeta(`${OFFICIEL.fb_page_id}/insights?metric=page_impressions_unique,page_post_engagements,page_views_total,page_daily_follows_unique,page_daily_unfollows_unique&period=day&since=${since}&until=${until}`, OFFICIEL.page_token)
+    const g = n => { const m=(d.data||[]).find(x=>x.name===n); return (m?.values||[]).reduce((a,v)=>a+(typeof v.value==='number'?v.value:0),0) }
+    return {reach: g('page_impressions_unique'), engagements: g('page_post_engagements'), views: g('page_views_total'), follows: g('page_daily_follows_unique'), unfollows: g('page_daily_unfollows_unique')}
+  } catch(e) { console.warn('[officiel] fb page', since, e.message); return {reach:0, engagements:0, views:0, follows:0, unfollows:0} }
+}
+
+async function officielFbPosts(since, until) {
+  const sinceT = new Date(since+'T00:00:00').getTime()
+  const untilT = new Date(until+'T23:59:59').getTime()
+  // limit=25 max : au-delà, Meta renvoie « Please reduce the amount of data »
+  let posts = [], url = `${OFFICIEL.fb_page_id}/published_posts?fields=id,created_time,message,permalink_url,full_picture,shares,reactions.summary(true).limit(0),comments.summary(true).limit(0),attachments{media_type}&limit=25`
+  while(url){
+    const d = await fetchMeta(url, OFFICIEL.page_token)
+    const items = d.data||[]
+    items.forEach(p => { const t = new Date(p.created_time).getTime(); if(t>=sinceT && t<=untilT) posts.push(p) })
+    const oldest = items.length ? new Date(items[items.length-1].created_time).getTime() : 0
+    if(!items.length || oldest < sinceT) break
+    url = officielNext(d)
+    if(posts.length > 600) break
+  }
+  return posts
+}
+
+async function officielFbPostInsights(posts, onProgress) {
+  const MAXM = 250
+  const list = posts.slice(0, MAXM)
+  const rows = []
+  const typeMap = {video:'Vidéo', album:'Carrousel', photo:'Photo', share:'Lien'}
+  for(let i=0; i<list.length; i+=10){
+    const batch = list.slice(i, i+10)
+    await Promise.all(batch.map(async p => {
+      let reach = 0, clicks = null
+      try {
+        const d = await fetchMeta(`${p.id}/insights?metric=post_impressions_unique,post_clicks`, OFFICIEL.page_token)
+        const g = n => { const x=(d.data||[]).find(y=>y.name===n); return x?.values?.[0]?.value||0 }
+        reach = g('post_impressions_unique'); clicks = g('post_clicks')
+      } catch(e) { console.warn('[officiel] fb post insight', p.id, e.message) }
+      const reactions = p.reactions?.summary?.total_count||0
+      const comments = p.comments?.summary?.total_count||0
+      const shares = p.shares?.count||0
+      const mt = (p.attachments?.data||[])[0]?.media_type||''
+      rows.push({
+        id: p.id, date: p.created_time, type: typeMap[mt]||(mt?mt.charAt(0).toUpperCase()+mt.slice(1):'Post'),
+        caption: (p.message||'').slice(0,90), permalink: p.permalink_url||'', thumb: p.full_picture||'',
+        reach, clicks, likes: reactions, comments, shares,
+        interactions: reactions + comments + shares
+      })
+    }))
+    if(onProgress) onProgress(Math.min(i+10, list.length), list.length)
+  }
+  rows.sort((a,b) => b.date.localeCompare(a.date))
+  const sum = k => rows.reduce((a,r) => a + (r[k]||0), 0)
+  return {rows, reach: sum('reach'), interactions: sum('interactions'), analyzed: rows.length, truncated: posts.length > MAXM}
+}
+
+async function loadOfficielFacebook(since, until, prog) {
+  const chunks = officielChunks(since, until)
+  const acc = {reach:0, engagements:0, views:0}, fol = {follows:0, unfollows:0}
+  for(let i=0; i<chunks.length; i++){
+    prog(`Statistiques de la page Facebook… (${i+1}/${chunks.length})`)
+    const t = await officielFbPageTotals(chunks[i].since, chunks[i].until)
+    acc.reach += t.reach; acc.engagements += t.engagements; acc.views += t.views
+    fol.follows += t.follows; fol.unfollows += t.unfollows
+  }
+  prog('Liste des publications…')
+  const posts = await officielFbPosts(since, until)
+  const organic = await officielFbPostInsights(posts, (done, total) => prog(`Analyse des publications… (${done}/${total})`))
+  const info = await fetchMeta(`${OFFICIEL.fb_page_id}?fields=followers_count,name`, OFFICIEL.token)
+  return {account: acc, fol, nbMedia: posts.length, organic, followers: info.followers_count, username: info.name}
+}
+
+// ── Officiel : chargement + cache ───────────────────────────────────────────
+async function loadOfficielData(force) {
+  const cacheKey = `off3_${officielPlatform}_${currentPeriod}`
+  if(!force){ const c = DB.getCache('officiel', cacheKey); if(c) return c }
+  const {since, until} = officielRange()
+  const prog = t => { const el = document.getElementById('off-progress'); if(el) el.textContent = t }
+  // Pubs : un seul fetch pour les deux plateformes, cache séparé
+  const adsKey = 'ads3_' + currentPeriod
+  let adsSplit = force ? null : DB.getCache('officiel', adsKey)
+  if(!adsSplit){
+    prog('Données publicitaires…')
+    adsSplit = await officielAdsSplit(since, until)
+    if(!adsSplit.err) DB.setCache('officiel', adsKey, adsSplit)
+  }
+  const plat = officielPlatform === 'facebook'
+    ? await loadOfficielFacebook(since, until, prog)
+    : await loadOfficielInstagram(since, until, prog)
+  const data = {since, until, platform: officielPlatform, ads: adsSplit[officielPlatform], adsErr: adsSplit.err, ...plat, ts: Date.now()}
+  DB.setCache('officiel', cacheKey, data)
+  return data
+}
+
+// Relevé quotidien dans Supabase (historique long terme des followers)
+async function officielSnapshot() {
+  const today = isoLocal(new Date())
+  if(localStorage.getItem('rsf_officiel_snap') === today) return
+  try {
+    const info = await fetchMeta(`${OFFICIEL.ig_id}?fields=followers_count`, OFFICIEL.token)
+    const fbInfo = await fetchMeta(`${OFFICIEL.fb_page_id}?fields=followers_count`, OFFICIEL.token)
+    const s = new Date(); s.setDate(s.getDate()-28)
+    const d = await fetchMeta(`${OFFICIEL.ig_id}/insights?metric=reach,follower_count&period=day&since=${isoLocal(s)}&until=${today}`, OFFICIEL.token)
+    const byDay = {}
+    ;(d.data||[]).forEach(m => (m.values||[]).forEach(v => {
+      const day = v.end_time.slice(0,10)
+      byDay[day] = byDay[day] || {day, reach: 0, new_followers: 0}
+      if(m.name === 'reach') byDay[day].reach = v.value||0
+      if(m.name === 'follower_count') byDay[day].new_followers = v.value||0
+    }))
+    const rows = Object.values(byDay)
+    const hdrs = {'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'}
+    if(rows.length) await fetch(`${SUPABASE_URL}/rest/v1/officiel_snapshots`, {method:'POST', headers: hdrs, body: JSON.stringify(rows)})
+    await fetch(`${SUPABASE_URL}/rest/v1/officiel_snapshots`, {method:'POST', headers: hdrs, body: JSON.stringify([{day: today, followers_total: info.followers_count, fb_followers_total: fbInfo.followers_count}])})
+    localStorage.setItem('rsf_officiel_snap', today)
+  } catch(e) { console.warn('[officiel] snapshot:', e.message) }
+}
+
+function officielPeriodLabel() {
+  const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  if(currentPeriod === '30d') return '30 derniers jours'
+  if(currentPeriod === 'max') return '24 derniers mois'
+  if(currentPeriod.startsWith('range:')){ const p=currentPeriod.split(':'); const f=d=>{const[y,m,dd]=d.split('-');return `${dd}/${m}/${y}`}; return `${f(p[1])} → ${f(p[2])}` }
+  if(currentPeriod.startsWith('year-')) return currentPeriod.replace('year-','')+' — Toute l\'année'
+  const [fy,fm] = currentPeriod.split('-').map(Number)
+  return `${monthNames[fm]} ${fy}`
+}
+
+function officielSetPlatform(p) {
+  if(officielPlatform === p) return
+  officielPlatform = p
+  localStorage.setItem('rsf_off_platform', p)
+  renderOfficiel(false)
+}
+
+// Popup « Résultats mensuels » (année + mois, ou année entière)
+function openOfficielMonthPicker() {
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const years = []; for(let y = new Date().getFullYear(); y >= 2023; y--) years.push(y)
+  // pré-remplissage selon la sélection en cours, sinon mois en cours
+  let selYear = String(new Date().getFullYear()), selMonth = String(new Date().getMonth())
+  if(currentPeriod.startsWith('year-')){ selYear = currentPeriod.replace('year-',''); selMonth = 'all' }
+  else if(/^\d{4}-\d{1,2}$/.test(currentPeriod)){ const p = currentPeriod.split('-'); selYear = p[0]; selMonth = p[1] }
+  document.getElementById('mp-year').innerHTML = years.map(y=>`<option value="${y}"${String(y)===selYear?' selected':''}>${y}</option>`).join('')
+  document.getElementById('mp-month').innerHTML = `<option value="all"${selMonth==='all'?' selected':''}>Toute l'année</option>` +
+    monthNames.map((mn,i)=>`<option value="${i}"${String(i)===selMonth?' selected':''}>${mn}</option>`).join('')
+  document.getElementById('mp-overlay').style.display='flex'
+}
+function closeOfficielMonthPicker() {
+  document.getElementById('mp-overlay').style.display='none'
+}
+function applyOfficielMonth() {
+  const y = document.getElementById('mp-year').value
+  const m = document.getElementById('mp-month').value
+  closeOfficielMonthPicker()
+  changePeriod('__officiel__', m === 'all' ? 'year-' + y : `${y}-${m}`)
+}
+
+async function renderOfficiel(force, period) {
+  if(currentRole !== 'admin' && currentRole !== 'cm') return
+  if(period) currentPeriod = period
+  if(currentPeriod === 'max') currentPeriod = '30d' // ancien bouton retiré
+  const isRange = currentPeriod.startsWith('range:')
+  const isMonthYear = currentPeriod.startsWith('year-') || /^\d{4}-\d{1,2}$/.test(currentPeriod)
+  const isIG = officielPlatform !== 'facebook'
+  document.getElementById('main').innerHTML = `
+    <div class="topbar">
+      <h1>My Beers Officiel <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${isIG ? '@mybeers.officiel' : 'Page Facebook'}</span></h1>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="off-cache-ts" style="font-size:11px;color:var(--tx3)"></span>
+        <button class="btn" onclick="renderOfficiel(true)">Actualiser</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-ig${isIG?' active':''}" onclick="officielSetPlatform('instagram')">Instagram</div>
+      <div class="tab tab-fb${!isIG?' active':''}" onclick="officielSetPlatform('facebook')">Facebook</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--tx2)">Période :</span>
+      <button class="btn btn-sm${currentPeriod==='30d'?' btn-primary':''}" onclick="changePeriod('__officiel__','30d')">30 derniers jours</button>
+      <button class="btn btn-sm${isMonthYear?' btn-primary':''}" onclick="openOfficielMonthPicker()">${isMonthYear?officielPeriodLabel():'Résultats mensuels'} ▾</button>
+      <button class="btn btn-sm${isRange?' btn-primary':''}" onclick="openDateRangePicker('__officiel__')">${isRange?officielPeriodLabel():'Personnalisé'} ▾</button>
+    </div>
+    <div id="off-body" class="${isIG?'off-ig':'off-fb'}"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span><span id="off-progress">Chargement…</span></div></div>`
+  try {
+    const data = await loadOfficielData(force)
+    if(data.platform !== officielPlatform) return // l'utilisateur a changé d'onglet pendant le chargement
+    const body = document.getElementById('off-body')
+    if(body) body.innerHTML = officielBody(data)
+    const ts = document.getElementById('off-cache-ts')
+    if(ts && data.ts) ts.textContent = 'Données du ' + new Date(data.ts).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})
+    officielSnapshot()
+  } catch(e) {
+    const body = document.getElementById('off-body')
+    if(body) body.innerHTML = `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${escHtml(e.message)}</div></div>`
+  }
+}
+
+function officielBody(d) {
+  const isIG = d.platform !== 'facebook'
+  const ads = d.ads, org = d.organic
+  const orgInter = isIG ? org.interactions : org.interactions
+  const couvTotale = org.reach + ads.reach
+  const interTotale = orgInter + ads.engagement
+  const folActifs = d.fol.follows - d.fol.unfollows
+  const couvSponsoMoy = ads.nbContents > 0 ? ads.reach / ads.nbContents : 0
+  const interSponsoMoy = ads.nbContents > 0 ? ads.engagement / ads.nbContents : 0
+  const coutCouv = ads.reach > 0 ? ads.spend / ads.reach * 1000 : 0
+  const coutInter = ads.engagement > 0 ? ads.spend / ads.engagement : 0
+  const visitesOrg = isIG ? d.account.profile_views : d.account.views
+  const ratioFolVisite = visitesOrg > 0 ? d.fol.follows / visitesOrg * 100 : 0
+  const coutFolContenu = ads.sponsoredFollows > 0 ? ads.spend / ads.sponsoredFollows : 0
+  const signCol = n => n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--tx)'
+  const sign = n => (n > 0 ? '+' : '') + fmt(n)
+
+  return `
+    ${d.adsErr ? `<div class="card" style="margin-bottom:1rem"><div class="warn-box"><strong>Compte publicitaire :</strong> ${escHtml(d.adsErr)} — les métriques sponsorisées sont indisponibles.</div></div>` : ''}
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Contenus & budget <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${officielPeriodLabel()} — ${isIG?'Instagram':'Facebook'}</span></div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">Nombre de contenus</div><div class="kv">${fmt(d.nbMedia)}</div><div class="ks">publiés sur ${isIG?'Instagram':'la page Facebook'}</div></div>
+        <div class="kc"><div class="kl">Contenus sponsorisés</div><div class="kv">${fmt(ads.nbContents)}</div><div class="ks">${fmt(ads.nbAds)} publicités ${isIG?'Instagram':'Facebook'}</div></div>
+        <div class="kc"><div class="kl">Budget dépensé</div><div class="kv">${fmtEur(ads.spend)}</div><div class="ks">placements ${isIG?'Instagram':'Facebook'}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Couverture</div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">Couverture totale</div><div class="kv">${fmt(couvTotale)}</div><div class="ks">organique + sponsorisée</div></div>
+        <div class="kc"><div class="kl">Couverture organique</div><div class="kv">${fmt(org.reach)}</div><div class="ks">somme des contenus publiés${org.truncated?' (partiel)':''}</div></div>
+        <div class="kc"><div class="kl">Couverture sponsorisée</div><div class="kv">${fmt(ads.reach)}</div><div class="ks">pubs ${isIG?'Instagram':'Facebook'}</div></div>
+        <div class="kc"><div class="kl">Couverture sponsorisée moyenne</div><div class="kv">${fmt(Math.round(couvSponsoMoy))}</div><div class="ks">par contenu sponsorisé</div></div>
+        <div class="kc"><div class="kl">Coût / couverture</div><div class="kv">${fmtEur(coutCouv)}</div><div class="ks">pour 1 000 personnes touchées</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Interactions</div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">Interaction totale</div><div class="kv">${fmt(interTotale)}</div><div class="ks">organique + sponsorisée</div></div>
+        <div class="kc"><div class="kl">Interaction organique</div><div class="kv">${fmt(orgInter)}</div><div class="ks">somme des contenus publiés</div></div>
+        <div class="kc"><div class="kl">Interaction sponsorisée</div><div class="kv">${fmt(ads.engagement)}</div><div class="ks">interactions avec les publicités</div></div>
+        <div class="kc"><div class="kl">Interaction sponsorisée moyenne</div><div class="kv">${fmt(Math.round(interSponsoMoy))}</div><div class="ks">par contenu sponsorisé</div></div>
+        <div class="kc"><div class="kl">Coût par interaction</div><div class="kv">${fmtEur(coutInter)}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">${isIG?'Followers':'Abonnés de la page'}</div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">${isIG?'Followers':'Abonnés'}</div><div class="kv">${fmt(d.followers)}</div><div class="ks">aujourd'hui</div></div>
+        <div class="kc"><div class="kl">${isIG?'Followers':'Abonnés'} en plus</div><div class="kv" style="color:var(--green)">+${fmt(d.fol.follows)}</div><div class="ks">sur la période</div></div>
+        <div class="kc"><div class="kl">${isIG?'Followers':'Abonnés'} en moins</div><div class="kv" style="color:var(--red)">−${fmt(d.fol.unfollows)}</div><div class="ks">sur la période</div></div>
+        <div class="kc"><div class="kl">${isIG?'Followers':'Abonnés'} actifs</div><div class="kv" style="color:${signCol(folActifs)}">${sign(folActifs)}</div><div class="ks">évolution réelle (plus − moins)</div></div>
+        ${isIG?`<div class="kc"><div class="kl">Followers en plus par contenu Instagram</div><div class="kv">${fmt(org.follows)}</div><div class="ks">posts uniquement — les Reels ne sont pas comptés par l'API</div></div>`:''}
+        <div class="kc"><div class="kl">Suivis ou j'aime sponsorisés</div><div class="kv">${fmt(ads.sponsoredFollows)}</div><div class="ks">via les publicités ${isIG?'Instagram':'Facebook'}</div></div>
+        <div class="kc"><div class="kl">Coût par ${isIG?'follower':'abonné'} en plus via le contenu</div><div class="kv">${fmtEur(coutFolContenu)}</div><div class="ks">budget ÷ suivis sponsorisés</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">${isIG?'Visites du profil':'Visites de la page'}</div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">${isIG?'Visites profil total':'Vues de la page'}</div><div class="kv">${fmt(visitesOrg)}</div></div>
+        <div class="kc"><div class="kl">Visites de la page sponsorisée</div><div class="kv">${fmt(ads.visits)}</div><div class="ks">clics des campagnes Trafic ${isIG?'Instagram':'Facebook'}</div></div>
+        <div class="kc"><div class="kl">Ratio ${isIG?'followers':'abonnés'} en plus / visite</div><div class="kv">${ratioFolVisite ? ratioFolVisite.toFixed(1).replace('.',',')+' %' : '—'}</div><div class="ks">${isIG?'followers':'abonnés'} gagnés ÷ ${isIG?'visites du profil':'vues de la page'}</div></div>
+      </div>
+    </div>
+    ${officielPostsTable(d)}
+    <div class="card">
+      <div class="ct">À savoir</div>
+      <div style="font-size:12px;color:var(--tx2);line-height:1.7">
+        • Les métriques <strong>organiques</strong> sont la somme des statistiques de chaque contenu publié dans la période (valeurs cumulées du contenu depuis sa publication).<br>
+        • Les métriques <strong>sponsorisées</strong> proviennent du compte publicitaire (${OFFICIEL.ad_account_id}), placements ${isIG?'Instagram uniquement':'Facebook (incl. Audience Network et Messenger, montants marginaux)'}.<br>
+        • Une <strong>publicité</strong> est comptée sur la plateforme de la publication qu'elle met en avant (post Instagram boosté → Instagram, post Facebook boosté → Facebook) ; les <strong>contenus sponsorisés</strong> sont dédoublonnés par nom. Les montants en € restent ventilés selon la diffusion réelle (les placements automatiques font déborder quelques euros sur l'autre plateforme).<br>
+        • Un relevé quotidien (followers Instagram et Facebook, couverture) est enregistré dans Supabase pour construire l'historique long terme.
+      </div>
+    </div>`
+}
+
+function officielPostsTable(d) {
+  const isIG = d.platform !== 'facebook'
+  const rows = d.organic.rows || []
+  if(!rows.length) return `<div class="card" style="margin-bottom:1.25rem"><div class="ct">Détail par contenu</div><p class="empty">Aucun contenu publié sur la période.</p></div>`
+  const v = n => (n===null||n===undefined) ? '—' : fmt(n)
+  const dt = s => new Date(s).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', year:'2-digit'})
+  const head = isIG
+    ? '<th></th><th>Date</th><th>Type</th><th style="text-align:left">Contenu</th><th>Couverture</th><th>Vues</th><th>J\'aime</th><th>Comm.</th><th>Partages</th><th>Enreg.</th><th>Interactions</th><th>Abonnés</th>'
+    : '<th></th><th>Date</th><th>Type</th><th style="text-align:left">Contenu</th><th>Couverture</th><th>Clics</th><th>Réactions</th><th>Comm.</th><th>Partages</th><th>Interactions</th>'
+  const body = rows.map(r => {
+    const thumb = r.thumb ? `<img src="${escHtml(r.thumb)}" loading="lazy" style="width:42px;height:42px;object-fit:cover;border-radius:6px;display:block">` : '<div style="width:42px;height:42px;border-radius:6px;background:var(--bg3)"></div>'
+    const caption = `<a href="${escHtml(r.permalink)}" target="_blank" style="color:var(--tx);text-decoration:none">${escHtml(r.caption)||'<span style="color:var(--tx3)">(sans texte)</span>'}</a>`
+    return isIG
+      ? `<tr><td>${thumb}</td><td style="white-space:nowrap">${dt(r.date)}</td><td>${r.type}</td><td class="tal" style="max-width:320px;font-size:11px;line-height:1.4">${caption}</td><td>${v(r.reach)}</td><td>${v(r.views)}</td><td>${v(r.likes)}</td><td>${v(r.comments)}</td><td>${v(r.shares)}</td><td>${v(r.saved)}</td><td><strong>${v(r.interactions)}</strong></td><td>${v(r.follows)}</td></tr>`
+      : `<tr><td>${thumb}</td><td style="white-space:nowrap">${dt(r.date)}</td><td>${r.type}</td><td class="tal" style="max-width:320px;font-size:11px;line-height:1.4">${caption}</td><td>${v(r.reach)}</td><td>${v(r.clicks)}</td><td>${v(r.likes)}</td><td>${v(r.comments)}</td><td>${v(r.shares)}</td><td><strong>${v(r.interactions)}</strong></td></tr>`
+  }).join('')
+  return `<div class="card" style="margin-bottom:1.25rem">
+    <div class="ct">Détail par contenu <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${rows.length} contenu${rows.length>1?'s':''}${d.organic.truncated?' (250 premiers analysés)':''} — statistiques organiques cumulées</span></div>
+    <div class="tbl-wrap"><table class="t">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+  </div>`
+}
+
 // ── CHANGE PERIOD ──────────────────────────────────────────────────────────
 function changePeriod(pdvId, period) {
   currentTypeFilter = null
   currentPeriod = period
-  renderDash(pdvId, false, period)
+  if(pdvId === '__officiel__') renderOfficiel(false, period)
+  else renderDash(pdvId, false, period)
 }
 
 function filterByType(pdvId, type) {
@@ -2113,6 +2653,27 @@ function applyDateRange() {
 // ── INIT ───────────────────────────────────────────────────────────────────
 buildSidebar(null)
 </script>
+
+<div id="mp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center" onclick="if(event.target===this)closeOfficielMonthPicker()">
+  <div style="background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:1.75rem;width:320px;display:flex;flex-direction:column;gap:1.25rem;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+    <div style="font-size:15px;font-weight:600;color:var(--tx)">Résultats mensuels</div>
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div>
+        <label>Année</label>
+        <select id="mp-year"></select>
+      </div>
+      <div>
+        <label>Mois</label>
+        <select id="mp-month"></select>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--tx3);margin:0">Choisissez « Toute l'année » pour voir l'année complète. Les statistiques de compte sont limitées à 2 ans en arrière par Meta.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeOfficielMonthPicker()">Annuler</button>
+      <button class="btn btn-sm btn-primary" onclick="applyOfficielMonth()">Valider</button>
+    </div>
+  </div>
+</div>
 
 <div id="rp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center" onclick="if(event.target===this)closeDateRangePicker()">
   <div style="background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--rl);padding:1.75rem;width:320px;display:flex;flex-direction:column;gap:1.25rem;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
