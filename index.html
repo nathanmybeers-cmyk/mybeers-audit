@@ -2390,7 +2390,8 @@ async function loadOfficielData(force) {
     ? await loadOfficielFacebook(since, until, prog)
     : await loadOfficielInstagram(since, until, prog)
   const data = {since, until, platform: officielPlatform, ads: adsSplit[officielPlatform], adsErr: adsSplit.err, ...plat, ts: Date.now()}
-  DB.setCache('officiel', cacheKey, data)
+  // Ne pas mémoriser un état d'erreur (ex : panne Meta) — il serait servi depuis le cache pendant 7 jours
+  if(!adsSplit.err) DB.setCache('officiel', cacheKey, data)
   return data
 }
 
