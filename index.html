@@ -107,12 +107,17 @@ table.t tr:hover td{background:var(--bg3)}
 /* MY BEERS OFFICIEL — couleurs par plateforme */
 .tab.tab-ig.active{background:var(--orchid-bg);color:var(--orchid-tx);border-color:var(--orchid);font-weight:600}
 .tab.tab-fb.active{background:var(--blue-bg);color:var(--blue-tx);border-color:var(--blue);font-weight:600}
+.tab.tab-ads.active{background:var(--green-bg);color:var(--green-tx);border-color:var(--green);font-weight:600}
 .off-ig .kc{background:var(--orchid-bg)}
 .off-ig .card{border-color:color-mix(in srgb, var(--orchid) 25%, var(--bd))}
 .off-ig .ct{color:var(--orchid-tx)}
 .off-fb .kc{background:var(--blue-bg)}
 .off-fb .card{border-color:color-mix(in srgb, var(--blue) 30%, var(--bd))}
 .off-fb .ct{color:var(--blue-tx)}
+.off-ads .kc{background:var(--green-bg)}
+.off-ads .card{border-color:color-mix(in srgb, var(--green) 25%, var(--bd))}
+.off-ads .ct{color:var(--green-tx)}
+.off-adbar{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .token-field{font-family:monospace;font-size:11px}
 .logout-btn{font-size:11px;color:var(--tx3);cursor:pointer;padding:3px 7px;border-radius:var(--r);border:0.5px solid var(--bd)}
 .logout-btn:hover{background:var(--bg3)}
@@ -2207,6 +2212,89 @@ async function officielAdsSplit(since, until) {
   return out
 }
 
+// ── Officiel : détail par publicité (espace « Publicités ») ─────────────────
+// Totaux par pub (tous placements confondus) + vignette, permalien et plateforme
+async function officielAdsDetail(since, until) {
+  const tr = encodeURIComponent(`{"since":"${since}","until":"${until}"}`)
+  let rows = [], url = `${OFFICIEL.ad_account_id}/insights?fields=ad_id,ad_name,spend,reach,impressions,cpm,ctr,actions&level=ad&time_range=${tr}&limit=200`
+  while(url){
+    const d = await fetchMeta(url, OFFICIEL.token)
+    rows = rows.concat(d.data||[])
+    url = officielNext(d)
+    if(rows.length > 2000) break
+  }
+  rows = rows.filter(r => (parseFloat(r.spend)||0) > 0)
+  // Créatifs : vignette, permalien, classification de plateforme (post boosté)
+  const ids = rows.map(r => r.ad_id)
+  const meta = {}
+  for(let i=0; i<ids.length; i+=50){
+    const batch = ids.slice(i, i+50)
+    try {
+      const d = await fetchMeta(`?ids=${batch.join(',')}&fields=creative{thumbnail_url,instagram_permalink_url,source_instagram_media_id,effective_object_story_id}`, OFFICIEL.token)
+      batch.forEach(id => {
+        const c = (d[id]||{}).creative || {}
+        meta[id] = {
+          thumb: c.thumbnail_url || '',
+          permalink: c.instagram_permalink_url || '',
+          platform: c.source_instagram_media_id ? 'instagram' : (c.effective_object_story_id ? 'facebook' : 'facebook')
+        }
+      })
+    } catch(e) { console.warn('[officiel] ads detail créatifs:', e.message) }
+  }
+  return rows.map(r => {
+    const m = meta[r.ad_id] || {}
+    const spend = parseFloat(r.spend)||0
+    const engagement = getAction(r.actions, 'post_engagement')
+    return {
+      id: r.ad_id, name: r.ad_name||'', platform: m.platform||'facebook',
+      thumb: m.thumb||'', permalink: m.permalink||'',
+      spend, reach: parseInt(r.reach)||0, impressions: parseInt(r.impressions)||0,
+      cpm: parseFloat(r.cpm)||0, ctr: parseFloat(r.ctr)||0,
+      engagement, costPerInter: engagement>0 ? spend/engagement : 0,
+      videoViews: getAction(r.actions, 'video_view'), linkClicks: getAction(r.actions, 'link_click')
+    }
+  }).sort((a,b) => b.spend - a.spend)
+}
+
+// ── Officiel : cache Supabase des périodes complètes (mois/années passés) ────
+function officielPeriodComplete(period) {
+  const now = new Date()
+  if(/^\d{4}-\d{1,2}$/.test(period)){ const [y,m] = period.split('-').map(Number); return y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth()) }
+  if(period.startsWith('year-')){ return parseInt(period.replace('year-','')) < now.getFullYear() }
+  return false // 30 jours, plage, mois ou année en cours : les chiffres bougent encore
+}
+async function officielCacheGet(key) {
+  try {
+    const r = await supabaseFetch(`officiel_cache?cache_key=eq.${encodeURIComponent(key)}&select=data`)
+    return (r && r[0]) ? r[0].data : null
+  } catch(e) { console.warn('[officiel] cache Supabase get:', e.message); return null }
+}
+async function officielCachePut(key, data) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/officiel_cache`, {
+      method: 'POST',
+      headers: {'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'},
+      body: JSON.stringify([{cache_key: key, data, updated_at: new Date().toISOString()}])
+    })
+  } catch(e) { console.warn('[officiel] cache Supabase put:', e.message) }
+}
+
+async function loadOfficielAdsDetail(force) {
+  const localKey = 'adsd4_' + currentPeriod
+  if(!force){ const c = DB.getCache('officiel', localKey); if(c) return c }
+  const complete = officielPeriodComplete(currentPeriod)
+  const sbKey = `adsdetail_v1_${currentPeriod}`
+  if(!force && complete){ const sb = await officielCacheGet(sbKey); if(sb){ DB.setCache('officiel', localKey, sb); return sb } }
+  const {since, until} = officielRange()
+  const prog = t => { const el = document.getElementById('off-progress'); if(el) el.textContent = t }
+  prog('Détail des publicités…')
+  const ads = await officielAdsDetail(since, until)
+  const data = {ads, ts: Date.now()}
+  DB.setCache('officiel', localKey, data)
+  if(complete) officielCachePut(sbKey, data)
+  return data
+}
+
 // ── Officiel : organique Instagram ──────────────────────────────────────────
 async function officielIgTotals(since, until) {
   try {
@@ -2374,12 +2462,16 @@ async function loadOfficielFacebook(since, until, prog) {
 
 // ── Officiel : chargement + cache ───────────────────────────────────────────
 async function loadOfficielData(force) {
-  const cacheKey = `off3_${officielPlatform}_${currentPeriod}`
+  const cacheKey = `off4_${officielPlatform}_${currentPeriod}`
   if(!force){ const c = DB.getCache('officiel', cacheKey); if(c) return c }
+  const complete = officielPeriodComplete(currentPeriod)
+  const sbKey = `data_v1_${officielPlatform}_${currentPeriod}`
+  // Période passée complète (immuable) : servie depuis Supabase, aucun appel Meta
+  if(!force && complete){ const sb = await officielCacheGet(sbKey); if(sb){ DB.setCache('officiel', cacheKey, sb); return sb } }
   const {since, until} = officielRange()
   const prog = t => { const el = document.getElementById('off-progress'); if(el) el.textContent = t }
   // Pubs : un seul fetch pour les deux plateformes, cache séparé
-  const adsKey = 'ads3_' + currentPeriod
+  const adsKey = 'ads4_' + currentPeriod
   let adsSplit = force ? null : DB.getCache('officiel', adsKey)
   if(!adsSplit){
     prog('Données publicitaires…')
@@ -2391,7 +2483,10 @@ async function loadOfficielData(force) {
     : await loadOfficielInstagram(since, until, prog)
   const data = {since, until, platform: officielPlatform, ads: adsSplit[officielPlatform], adsErr: adsSplit.err, ...plat, ts: Date.now()}
   // Ne pas mémoriser un état d'erreur (ex : panne Meta) — il serait servi depuis le cache pendant 7 jours
-  if(!adsSplit.err) DB.setCache('officiel', cacheKey, data)
+  if(!adsSplit.err){
+    DB.setCache('officiel', cacheKey, data)
+    if(complete) officielCachePut(sbKey, data) // sauvegarde permanente des mois/années passés
+  }
   return data
 }
 
@@ -2465,18 +2560,21 @@ async function renderOfficiel(force, period) {
   if(currentPeriod === 'max') currentPeriod = '30d' // ancien bouton retiré
   const isRange = currentPeriod.startsWith('range:')
   const isMonthYear = currentPeriod.startsWith('year-') || /^\d{4}-\d{1,2}$/.test(currentPeriod)
-  const isIG = officielPlatform !== 'facebook'
+  const mode = officielPlatform // 'instagram' | 'facebook' | 'ads'
+  const titleSuffix = mode === 'ads' ? 'Publicités' : mode === 'facebook' ? 'Page Facebook' : '@mybeers.officiel'
+  const bodyClass = mode === 'ads' ? 'off-ads' : mode === 'facebook' ? 'off-fb' : 'off-ig'
   document.getElementById('main').innerHTML = `
     <div class="topbar">
-      <h1>My Beers Officiel <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${isIG ? '@mybeers.officiel' : 'Page Facebook'}</span></h1>
+      <h1>My Beers Officiel <span style="font-size:14px;font-weight:400;color:var(--tx2)">— ${titleSuffix}</span></h1>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="off-cache-ts" style="font-size:11px;color:var(--tx3)"></span>
         <button class="btn" onclick="renderOfficiel(true)">Actualiser</button>
       </div>
     </div>
     <div class="tabs">
-      <div class="tab tab-ig${isIG?' active':''}" onclick="officielSetPlatform('instagram')">Instagram</div>
-      <div class="tab tab-fb${!isIG?' active':''}" onclick="officielSetPlatform('facebook')">Facebook</div>
+      <div class="tab tab-ig${mode==='instagram'?' active':''}" onclick="officielSetPlatform('instagram')">Instagram</div>
+      <div class="tab tab-fb${mode==='facebook'?' active':''}" onclick="officielSetPlatform('facebook')">Facebook</div>
+      <div class="tab tab-ads${mode==='ads'?' active':''}" onclick="officielSetPlatform('ads')">Publicités</div>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--tx2)">Période :</span>
@@ -2484,8 +2582,19 @@ async function renderOfficiel(force, period) {
       <button class="btn btn-sm${isMonthYear?' btn-primary':''}" onclick="openOfficielMonthPicker()">${isMonthYear?officielPeriodLabel():'Résultats mensuels'} ▾</button>
       <button class="btn btn-sm${isRange?' btn-primary':''}" onclick="openDateRangePicker('__officiel__')">${isRange?officielPeriodLabel():'Personnalisé'} ▾</button>
     </div>
-    <div id="off-body" class="${isIG?'off-ig':'off-fb'}"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span><span id="off-progress">Chargement…</span></div></div>`
+    <div id="off-body" class="${bodyClass}"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span><span id="off-progress">Chargement…</span></div></div>`
   try {
+    if(mode === 'ads'){
+      const data = await loadOfficielAdsDetail(force)
+      if(officielPlatform !== 'ads') return
+      _officielAds = data.ads || []
+      const body = document.getElementById('off-body')
+      if(body) body.innerHTML = officielAdsBody(_officielAds)
+      drawOfficielAdsChart()
+      const ts = document.getElementById('off-cache-ts')
+      if(ts && data.ts) ts.textContent = 'Données du ' + new Date(data.ts).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})
+      return
+    }
     const data = await loadOfficielData(force)
     if(data.platform !== officielPlatform) return // l'utilisateur a changé d'onglet pendant le chargement
     const body = document.getElementById('off-body')
@@ -2497,6 +2606,99 @@ async function renderOfficiel(force, period) {
     const body = document.getElementById('off-body')
     if(body) body.innerHTML = `<div class="card"><div class="warn-box"><strong>Erreur API :</strong> ${escHtml(e.message)}</div></div>`
   }
+}
+
+// ── Officiel : espace « Publicités » — rendu + graphique comparatif ─────────
+let _officielAds = []
+let _officielAdMetric = 'spend'
+const OFF_AD_METRICS = [
+  {key:'spend',        label:'Budget',             unit:'eur'},
+  {key:'reach',        label:'Couverture',         unit:'num'},
+  {key:'engagement',   label:'Interactions',       unit:'num'},
+  {key:'cpm',          label:'Coût / 1000 impr.',  unit:'eur'},
+  {key:'costPerInter', label:'Coût / interaction', unit:'eur'}
+]
+const officielAdLabel = n => n.replace(/\((facebook|instagram|insta|fb|ig)\)/gi,'').replace(/\s+/g,' ').trim()
+
+function officielSetAdMetric(k) {
+  _officielAdMetric = k
+  document.querySelectorAll('#off-ad-metrics .btn').forEach(b => b.classList.toggle('btn-primary', b.dataset.m === k))
+  drawOfficielAdsChart()
+}
+
+function officielAdsBody(ads) {
+  if(!ads.length) return `<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
+  const totSpend = ads.reduce((a,r)=>a+r.spend,0)
+  const totReach = ads.reduce((a,r)=>a+r.reach,0)
+  const totInter = ads.reduce((a,r)=>a+r.engagement,0)
+  const nbIG = ads.filter(a=>a.platform==='instagram').length
+  const v = n => fmt(n)
+  const plat = p => p==='instagram'
+    ? '<span style="background:var(--orchid-bg);color:var(--orchid-tx);padding:2px 7px;border-radius:6px;font-size:10px">Instagram</span>'
+    : '<span style="background:var(--blue-bg);color:var(--blue-tx);padding:2px 7px;border-radius:6px;font-size:10px">Facebook</span>'
+  const body = ads.map(a => {
+    const thumb = a.thumb ? `<img src="${escHtml(a.thumb)}" loading="lazy" style="width:40px;height:40px;object-fit:cover;border-radius:6px;display:block">` : '<div style="width:40px;height:40px;border-radius:6px;background:var(--bg4)"></div>'
+    const name = a.permalink ? `<a href="${escHtml(a.permalink)}" target="_blank" style="color:var(--tx);text-decoration:none">${escHtml(officielAdLabel(a.name))}</a>` : escHtml(officielAdLabel(a.name))
+    return `<tr><td>${thumb}</td><td class="tal" style="max-width:260px;font-size:11px;line-height:1.4">${name}</td><td>${plat(a.platform)}</td><td>${fmtEur(a.spend)}</td><td>${v(a.reach)}</td><td>${v(a.impressions)}</td><td>${fmtEur(a.cpm)}</td><td>${a.ctr?a.ctr.toFixed(2).replace('.',',')+' %':'—'}</td><td><strong>${v(a.engagement)}</strong></td><td>${fmtEur(a.costPerInter)}</td></tr>`
+  }).join('')
+  return `
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Vue d'ensemble <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${officielPeriodLabel()}</span></div>
+      <div class="kgrid">
+        <div class="kc"><div class="kl">Publicités diffusées</div><div class="kv">${ads.length}</div><div class="ks">${nbIG} Instagram · ${ads.length-nbIG} Facebook</div></div>
+        <div class="kc"><div class="kl">Budget total</div><div class="kv">${fmtEur(totSpend)}</div></div>
+        <div class="kc"><div class="kl">Couverture cumulée</div><div class="kv">${v(totReach)}</div></div>
+        <div class="kc"><div class="kl">Interactions cumulées</div><div class="kv">${v(totInter)}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Comparatif des publicités</div>
+      <div id="off-ad-metrics" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem">
+        ${OFF_AD_METRICS.map(m=>`<button class="btn btn-sm${m.key===_officielAdMetric?' btn-primary':''}" data-m="${m.key}" onclick="officielSetAdMetric('${m.key}')">${m.label}</button>`).join('')}
+      </div>
+      <div class="chart-wrap" style="height:${Math.max(220, ads.length*30)}px"><canvas id="off-ad-chart"></canvas></div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:8px"><span class="off-adbar" style="background:var(--orchid)"></span>Instagram &nbsp; <span class="off-adbar" style="background:var(--blue)"></span>Facebook</div>
+    </div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Détail par publicité <span style="font-weight:400;font-size:11px;color:var(--tx3)">— triées par budget décroissant</span></div>
+      <div class="tbl-wrap"><table class="t">
+        <thead><tr><th></th><th class="tal">Publicité</th><th>Plateforme</th><th>Budget</th><th>Couverture</th><th>Impressions</th><th>CPM</th><th>CTR</th><th>Interactions</th><th>Coût/inter.</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table></div>
+    </div>`
+}
+
+function drawOfficielAdsChart() {
+  const ctx = document.getElementById('off-ad-chart')
+  if(!ctx || !_officielAds.length) return
+  const metric = OFF_AD_METRICS.find(m => m.key === _officielAdMetric) || OFF_AD_METRICS[0]
+  const sorted = [..._officielAds].sort((a,b) => (b[metric.key]||0) - (a[metric.key]||0))
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim()
+  const igC = css('--orchid'), fbC = css('--blue')
+  if(charts['offAd']) charts['offAd'].destroy()
+  charts['offAd'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(a => officielAdLabel(a.name)),
+      datasets: [{
+        label: metric.label,
+        data: sorted.map(a => a[metric.key]||0),
+        backgroundColor: sorted.map(a => a.platform === 'instagram' ? igC : fbC),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {display: false},
+        tooltip: {callbacks: {label: c => metric.unit === 'eur' ? fmtEur(c.parsed.x) : fmt(c.parsed.x)}}
+      },
+      scales: {
+        x: {beginAtZero: true, ticks: {callback: v => metric.unit === 'eur' ? v+' €' : fmt(v)}},
+        y: {ticks: {font: {size: 10}}}
+      }
+    }
+  })
 }
 
 function officielBody(d) {
