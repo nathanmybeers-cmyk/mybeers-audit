@@ -2618,7 +2618,7 @@ const OFF_AD_METRICS = [
   {key:'spend',      label:'Budget',           unit:'eur', adVal:a=>a.spend,      total:l=>_adSum(l,'spend')},
   {key:'reach',      label:'Couverture',       unit:'num', adVal:a=>a.reach,      total:l=>_adSum(l,'reach')},
   {key:'engagement', label:'Interactions',     unit:'num', adVal:a=>a.engagement, total:l=>_adSum(l,'engagement')},
-  {key:'costReach',  label:'Coût/couv',        unit:'eur', adVal:a=>a.reach>0?a.spend/a.reach*1000:0,       total:l=>{const r=_adSum(l,'reach');return r>0?_adSum(l,'spend')/r*1000:0}},
+  {key:'costReach',  label:'Coût/1000 couv',   unit:'eur', adVal:a=>a.reach>0?a.spend/a.reach*1000:0,       total:l=>{const r=_adSum(l,'reach');return r>0?_adSum(l,'spend')/r*1000:0}},
   {key:'costInter',  label:'Coût/interaction', unit:'eur', adVal:a=>a.engagement>0?a.spend/a.engagement:0,  total:l=>{const e=_adSum(l,'engagement');return e>0?_adSum(l,'spend')/e:0}}
 ]
 const officielAdLabel = n => n.replace(/\((facebook|instagram|insta|fb|ig)\)/gi,'').replace(/\s+/g,' ').trim()
@@ -2626,7 +2626,7 @@ const officielAdLabel = n => n.replace(/\((facebook|instagram|insta|fb|ig)\)/gi,
 function officielAdBubbles(metric) {
   const ig = _officielAds.filter(a=>a.platform==='instagram'), fb = _officielAds.filter(a=>a.platform==='facebook')
   const f = v => metric.unit==='eur' ? fmtEur(v) : fmt(Math.round(v))
-  const sub = metric.key==='costReach' ? '<div style="font-size:10px;opacity:.7">pour 1 000 pers.</div>' : ''
+  const sub = ''
   return `
     <div style="flex:1;min-width:160px;background:var(--orchid-bg);border-radius:var(--r);padding:.75rem .9rem">
       <div style="font-size:11px;color:var(--orchid-tx)">Instagram — ${metric.label}</div>
@@ -2684,7 +2684,7 @@ function officielAdsBody(ads) {
     <div class="card" style="margin-bottom:1.25rem">
       <div class="ct">Détail par publicité <span style="font-weight:400;font-size:11px;color:var(--tx3)">— triées par budget décroissant</span></div>
       <div class="tbl-wrap"><table class="t">
-        <thead><tr><th></th><th class="tal">Publicité</th><th>Plateforme</th><th>Budget</th><th>Couverture</th><th>Impressions</th><th>Coût/couv</th><th>CTR</th><th>Interactions</th><th>Coût/inter.</th></tr></thead>
+        <thead><tr><th></th><th class="tal">Publicité</th><th>Plateforme</th><th>Budget</th><th>Couverture</th><th>Impressions</th><th>Coût/1000 couv</th><th>CTR</th><th>Interactions</th><th>Coût/inter.</th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>
     </div>`
