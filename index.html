@@ -1390,9 +1390,7 @@ async function renderAvisGoogleTab(pdv, force) {
 
 function avisThemeSub(data, bucket) {
   if(!data) return `d'après 0 avis ${bucket}`
-  const a = data.analyzedCount||0, t = data.total||0
-  const extra = (t > a) ? ` (sur ${fmt(t)} au total, ${fmt(t-a)} sans commentaire)` : ''
-  return `d'après ${fmt(a)} avis ${bucket} avec commentaire${extra}`
+  return `d'après ${fmt(data.analyzedCount||0)} avis ${bucket} avec commentaire`
 }
 function avisThemeRows(data, color) {
   const themes = (data && data.themes) || []
@@ -1406,10 +1404,10 @@ function avisThemeRows(data, color) {
       `<div style="font-size:11px;color:var(--tx2);font-style:italic;margin-top:4px;line-height:1.55">« ${escHtml(s.text)} »${s.date?`<span style="color:var(--tx3);font-style:normal"> — ${dt(s.date)}</span>`:''}</div>`
     ).join('')
     return `<div style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:8px;font-size:12px">
-        <span style="flex:1;font-weight:500">${escHtml(t.key)}${last}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="flex:1;font-weight:600;font-size:14px">${escHtml(t.key)}${last}</span>
         <div style="width:90px;background:var(--bg3);border-radius:4px;height:9px;overflow:hidden;flex-shrink:0"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
-        <span style="width:52px;text-align:right;color:var(--tx2);flex-shrink:0">${t.count} avis</span>
+        <span style="width:52px;text-align:right;color:var(--tx2);flex-shrink:0;font-size:12px">${t.count} avis</span>
       </div>${samples}
     </div>`
   }).join('')
@@ -1449,7 +1447,7 @@ function avisGoogleBody(loc, ts) {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
       <div class="card">
-        <div class="ct">Points négatifs récurrents <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${avisThemeSub(loc.negative, '≤ 3 ★')}</span></div>
+        <div class="ct" style="color:var(--red)">Points négatifs récurrents <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${avisThemeSub(loc.negative, '≤ 3 ★')}</span></div>
         ${avisThemeRows(loc.negative, 'var(--red)')}
       </div>
       <div class="card">

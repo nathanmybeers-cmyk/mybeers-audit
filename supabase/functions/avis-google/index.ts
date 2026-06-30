@@ -46,6 +46,18 @@ const POS_THEMES: { key: string; kw: string[] }[] = [
 ]
 const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
+// Ne conserve que la partie fran\u00e7aise d'un avis (Google ajoute souvent la traduction)
+//  - \u00ab texte FR (Translated by Google) texte EN \u00bb      \u2192 on garde ce qui pr\u00e9c\u00e8de
+//  - \u00ab (Translated by Google) texte EN (Original) FR \u00bb \u2192 on garde ce qui suit (Original)
+function frenchOnly(text: string | null): string {
+  if (!text) return ""
+  const orig = text.indexOf("(Original)")
+  if (orig !== -1) return text.slice(orig + "(Original)".length).trim()
+  const trans = text.indexOf("(Translated by Google)")
+  if (trans !== -1) return text.slice(0, trans).trim()
+  return text.trim()
+}
+
 async function getAccessToken(): Promise<string> {
   const body = new URLSearchParams({
     client_id: Deno.env.get("GOOGLE_CLIENT_ID") ?? "",
@@ -189,13 +201,14 @@ function analyzeThemes(
   const withText = inBucket.filter((r) => r.comment)
   const acc = themes.map((t) => ({ key: t.key, count: 0, lastDate: null as string | null, samples: [] as any[] }))
   for (const r of withText) {
-    const c = norm(r.comment)
+    const fr = frenchOnly(r.comment)
+    const c = norm(fr)
     const d = r.create_time ?? r.update_time ?? null
     themes.forEach((t, i) => {
       if (t.kw.some((k) => c.includes(norm(k)))) {
         acc[i].count++
         if (d && (!acc[i].lastDate || new Date(d) > new Date(acc[i].lastDate as string))) acc[i].lastDate = d
-        if (acc[i].samples.length < 3) acc[i].samples.push({ text: String(r.comment).replace(/\s+/g, " ").trim(), date: d, stars: r.star ?? 0 })
+        if (acc[i].samples.length < 1) acc[i].samples.push({ text: fr.replace(/\s+/g, " ").trim(), date: d, stars: r.star ?? 0 })
       }
     })
   }
@@ -218,7 +231,7 @@ function summarize(placeId: string, info: any, stored: any[], sync: any) {
   }
   const recent = stored.slice(0, 8).map((rv) => ({
     author: rv.author ?? "Anonyme", stars: rv.star ?? 0,
-    comment: (rv.comment ?? "").slice(0, 280), date: rv.create_time ?? rv.update_time ?? null,
+    comment: frenchOnly(rv.comment).slice(0, 280), date: rv.create_time ?? rv.update_time ?? null,
     replied: !!rv.has_reply,
   }))
   return {
