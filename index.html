@@ -1441,11 +1441,11 @@ function avisGoogleBody(loc, ts) {
       <div class="kc"><div class="kl">Taux de réponse</div><div class="kv" style="color:${loc.responseRate>=70?'var(--green)':loc.responseRate>=40?'var(--amber)':'var(--red)'}">${loc.responseRate}%</div><div class="ks">sur ${fmt(loc.fetchedCount)} avis analysés</div></div>
       <div class="kc"><div class="kl">Négatifs sans réponse</div><div class="kv" style="color:${loc.negativeNoReply>0?'var(--red)':'var(--green)'}">${fmt(loc.negativeNoReply)}</div><div class="ks">≤ 3 ★ sans réponse</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.25rem;margin-bottom:1.25rem">
       <div class="card"><div class="ct">Répartition par étoiles</div>${[5,4,3,2,1].map(bar).join('')}<div class="chart-wrap" style="height:160px;margin-top:1rem"><canvas id="avis-chart"></canvas></div></div>
       <div class="card"><div class="ct">Avis récents</div>${recent}</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.25rem;margin-bottom:1.25rem">
       <div class="card">
         <div class="ct" style="color:var(--red)">Points négatifs récurrents <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${avisThemeSub(loc.negative, '≤ 3 ★')}</span></div>
         ${avisThemeRows(loc.negative, 'var(--red)')}
@@ -2389,8 +2389,8 @@ function compGoogleResume(d){
   const starRows = `<div style="padding:6px 0">` + [5,4,3,2,1].map(s => `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
       <span style="width:30px;font-size:13px;font-weight:600;flex-shrink:0">${s}★</span>
-      <div style="flex:0 0 240px;background:var(--bg3);border-radius:5px;height:18px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
-      <span style="flex-shrink:0;font-size:13px;white-space:nowrap"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
+      <div style="flex:0 0 clamp(140px,38%,240px);background:var(--bg3);border-radius:5px;height:18px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
+      <span style="font-size:13px"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
     </div>`).join('') + `</div>`
   const medal = ['#E6A817','#9CA3AF','#B45309']
   const podium = top3.map((x,i) => `
@@ -2418,7 +2418,7 @@ function compGoogleResume(d){
       ${kpi('Taux de réponse moyen', Math.round(avgResp)+' %', '', 'var(--amber)')}
       ${kpi('Avis collectés au total', fmt(totStars), '', 'var(--purple)')}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.25rem;margin-bottom:1.25rem">
       <div class="card"><div class="ct">Répartition par niveau de note <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(n)} établissements</span></div>
         <div class="chart-wrap" style="height:230px"><canvas id="comp-niveau-chart"></canvas></div>
       </div>
@@ -2426,11 +2426,11 @@ function compGoogleResume(d){
     </div>
     <div class="card" style="margin-bottom:1.25rem">
       <div class="ct">Podium — Top 3</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${podium}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${podium}</div>
     </div>
     <div class="card">
       <div class="ct" style="color:var(--red)">Établissements prioritaires <span style="font-weight:400;font-size:11px;color:var(--tx3)">— notes les plus basses</span></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${prio}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${prio}</div>
     </div>`
 }
 
@@ -2443,7 +2443,7 @@ function compGoogleClassement(d){
     const tot = real || 1
     const segs = [5,4,3,2,1].map(s => (dist[s]||0)>0 ? `<div style="width:${(dist[s]/tot*100)}%;height:100%;background:${COMP_STARC[s]}"></div>` : '').join('')
     const counts = [5,4,3,2,1].map(s => `<span style="display:inline-block;min-width:84px"><span style="color:var(--tx3)">${s}★</span> ${fmt(dist[s]||0)} (${Math.round((dist[s]||0)/tot*100)}%)</span>`).join('')
-    return `<div class="card" style="display:flex;gap:16px;align-items:center;padding:14px 16px;border-left:4px solid ${i<3?['#E6A817','#9CA3AF','#B45309'][i]:'var(--bd2)'}">
+    return `<div class="card" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:14px 16px;border-left:4px solid ${i<3?['#E6A817','#9CA3AF','#B45309'][i]:'var(--bd2)'}">
       <div style="font-size:18px;font-weight:700;color:var(--tx3);width:42px;flex-shrink:0">#${i+1}</div>
       <div style="width:160px;flex-shrink:0">
         <div style="font-size:11px;color:var(--tx3)">My Beers</div>
