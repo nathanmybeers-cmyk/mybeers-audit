@@ -2346,7 +2346,26 @@ function compGoogleRanked(etabs){
 function compGoogleRenderBody(){
   const b = document.getElementById('comp-g-body')
   if(!b || !_compGoogleData) return
-  b.innerHTML = _compGoogleTab === 'resume' ? compGoogleResume(_compGoogleData) : compGoogleClassement(_compGoogleData)
+  if(_compGoogleTab === 'resume'){ b.innerHTML = compGoogleResume(_compGoogleData); setTimeout(drawCompNiveauChart, 50) }
+  else b.innerHTML = compGoogleClassement(_compGoogleData)
+}
+
+function drawCompNiveauChart(){
+  const ctx = document.getElementById('comp-niveau-chart')
+  if(!ctx || !_compGoogleData) return
+  const e = _compGoogleData.etabs.filter(x => (x.totalReviewCount||0) > 0)
+  const nr = x => compRound1(x.averageRating)
+  const hi = e.filter(x=>nr(x)>=4.0).length, mid = e.filter(x=>nr(x)>=3.5 && nr(x)<4.0).length, lo = e.filter(x=>nr(x)<3.5).length
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim()
+  if(charts['compNiveau']) charts['compNiveau'].destroy()
+  charts['compNiveau'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: [`Note ≥ 4,0 (${hi})`, `3,5 ≤ Note < 4,0 (${mid})`, `Note < 3,5 (${lo})`],
+      datasets: [{ data: [hi, mid, lo], backgroundColor: [css('--green'), css('--amber'), css('--red')], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } } } }
+  })
 }
 
 function compGoogleResume(d){
@@ -2368,19 +2387,12 @@ function compGoogleResume(d){
 
   const kpi = (label,val,sub,color) => `<div class="kc" style="background:${color};color:#fff"><div class="kl" style="color:rgba(255,255,255,.85)">${label}</div><div class="kv" style="color:#fff">${val}</div>${sub?`<div class="ks" style="color:rgba(255,255,255,.8)">${sub}</div>`:''}</div>`
   // bande niveau de note
-  const seg = (c,v) => v>0 ? `<div style="width:${Math.round(v/n*100)}%;height:100%;background:${c}"></div>` : ''
-  const niveauBar = `<div style="display:flex;height:20px;border-radius:6px;overflow:hidden;margin:8px 0 6px">${seg('var(--green)',lvlHigh)}${seg('var(--amber)',lvlMid)}${seg('var(--red)',lvlLow)}</div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--tx2)">
-      <span><span class="off-adbar" style="background:var(--green)"></span>Note ≥ 4,0 (${lvlHigh})</span>
-      <span><span class="off-adbar" style="background:var(--amber)"></span>3,5 ≤ Note < 4,0 (${lvlMid})</span>
-      <span><span class="off-adbar" style="background:var(--red)"></span>Note < 3,5 (${lvlLow})</span>
-    </div>`
-  const starRows = `<div style="max-width:560px">` + [5,4,3,2,1].map(s => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+  const starRows = [5,4,3,2,1].map(s => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
       <span style="width:26px;font-size:12px;font-weight:600;flex-shrink:0">${s}★</span>
-      <div style="flex:0 0 200px;background:var(--bg3);border-radius:4px;height:13px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
-      <span style="flex:1;font-size:12px;white-space:nowrap"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
-    </div>`).join('') + `</div>`
+      <div style="flex:0 0 130px;background:var(--bg3);border-radius:4px;height:13px;overflow:hidden;flex-shrink:0"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
+      <span style="flex:1;font-size:12px"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
+    </div>`).join('')
   const medal = ['#E6A817','#9CA3AF','#B45309']
   const podium = top3.map((x,i) => `
     <div class="card" style="padding:0;overflow:hidden">
@@ -2407,8 +2419,12 @@ function compGoogleResume(d){
       ${kpi('Taux de réponse moyen', Math.round(avgResp)+' %', '', 'var(--amber)')}
       ${kpi('Avis collectés au total', fmt(totalAvis), '', 'var(--purple)')}
     </div>
-    <div class="card" style="margin-bottom:1.25rem"><div class="ct">Répartition par niveau de note</div>${niveauBar}</div>
-    <div class="card" style="margin-bottom:1.25rem"><div class="ct">Répartition par nombre d'étoiles <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(totStars)} avis analysés</span></div>${starRows}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+      <div class="card"><div class="ct">Répartition par niveau de note <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(n)} établissements</span></div>
+        <div class="chart-wrap" style="height:230px"><canvas id="comp-niveau-chart"></canvas></div>
+      </div>
+      <div class="card"><div class="ct">Répartition par nombre d'étoiles <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(totStars)} avis analysés</span></div>${starRows}</div>
+    </div>
     <div class="card" style="margin-bottom:1.25rem">
       <div class="ct">Podium — Top 3</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${podium}</div>
