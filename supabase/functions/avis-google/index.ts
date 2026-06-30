@@ -23,16 +23,26 @@ const DIRECTORY_TTL_MS = 24 * 60 * 60 * 1000 // 24 h
 const SUMMARY_TTL_MS = 6 * 60 * 60 * 1000    // 6 h
 const MAX_FETCH = 2000
 
-// Thèmes des points négatifs (mots-clés en français, accents ignorés)
-const THEMES: { key: string; kw: string[] }[] = [
-  { key: "Attente / service",        kw: ["attente", "attendre", "attendu", "lent", "lente", "lents", "service", "servi", "serveur", "serveuse", "rapidite", "file", "queue", "patienter", "interminable"] },
-  { key: "Prix",                     kw: ["prix", "cher", "chere", "chers", "tarif", "couteux", "arnaque", "qualite prix", "qualite-prix", "ruineux", "abuse"] },
+// Thèmes des points NÉGATIFS (analysés sur les avis <= 3 ★, accents ignorés)
+const NEG_THEMES: { key: string; kw: string[] }[] = [
+  { key: "Attente / service",        kw: ["attente", "attendre", "attendu", "lent", "lente", "lents", "lenteur", "rapidite", "file", "queue", "patienter", "interminable", "jamais servi", "mal servi"] },
+  { key: "Prix",                     kw: ["prix", "cher", "chere", "chers", "tarif", "couteux", "arnaque", "ruineux", "abuse", "hors de prix"] },
   { key: "Propreté / hygiène",       kw: ["sale", "salete", "proprete", "crasse", "toilette", "hygiene", "collant", "poisseux", "degueulasse", "degoutant"] },
-  { key: "Bruit / ambiance",         kw: ["bruit", "bruyant", "sonore", "trop fort", "musique", "ambiance", "assourdissant"] },
-  { key: "Accueil / personnel",      kw: ["accueil", "personnel", "desagreable", "agressif", "impoli", "antipathique", "mal recu", "malpoli", "aimable", "froid", "meprisant"] },
-  { key: "Qualité bière / produits", kw: ["biere", "bieres", "plate", "eventee", "tiede", "chaude", "gobelet", "plastique", "mousse", "gout", "pression", "fade", "infecte"] },
-  { key: "Affluence / place",        kw: ["monde", "bonde", "place", "assis", "debout", "plein", "surcharge", "trop de monde", "serre"] },
-  { key: "Organisation / horaires",  kw: ["reservation", "reserve", "organisation", "ferme", "horaire", "commande", "erreur", "oubli", "desorganise"] },
+  { key: "Bruit / ambiance",         kw: ["bruit", "bruyant", "sonore", "trop fort", "assourdissant", "vacarme"] },
+  { key: "Accueil / personnel",      kw: ["desagreable", "agressif", "impoli", "antipathique", "mal recu", "malpoli", "meprisant", "personnel froid", "accueil froid", "pas aimable", "pas accueillant"] },
+  { key: "Qualité bière / produits", kw: ["plate", "eventee", "tiede", "biere chaude", "gobelet", "plastique", "pas de mousse", "infecte", "fade", "mauvaise biere"] },
+  { key: "Affluence / manque de place", kw: ["bonde", "trop de monde", "surcharge", "serre", "plus de place", "aucune place", "pas de place", "blinde"] },
+  { key: "Organisation / horaires",  kw: ["reservation", "organisation", "ferme", "horaire", "erreur de commande", "oubli", "desorganise", "mal organise"] },
+]
+
+// Thèmes des points POSITIFS (analysés sur les avis >= 4 ★)
+const POS_THEMES: { key: string; kw: string[] }[] = [
+  { key: "Ambiance / cadre",         kw: ["ambiance", "cadre", "chaleureux", "convivial", "agreable", "cosy", "decor", "deco", "terrasse", "detente", "bonne ambiance"] },
+  { key: "Accueil / personnel",      kw: ["accueil", "accueillant", "souriant", "aimable", "sympathique", "gentil", "personnel au top", "serveuse adorable", "serveur sympa", "attentionne", "service au top"] },
+  { key: "Choix de bières",          kw: ["choix", "selection", "variete", "carte", "degustation", "artisanale", "large choix", "bonnes bieres", "belle carte"] },
+  { key: "Rapport qualité-prix",     kw: ["rapport qualite", "qualite prix", "prix correct", "abordable", "raisonnable", "happy hour", "pas cher"] },
+  { key: "Concept / animations",     kw: ["concept", "concert", "quiz", "animation", "evenement", "blind test", "karaoke", "retransmission", "match", "musique live"] },
+  { key: "Très bon moment",          kw: ["super", "genial", "excellent", "parfait", "recommande", "incontournable", "adore", "formidable", "bon moment", "agreable moment"] },
 ]
 const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
@@ -167,20 +177,33 @@ async function syncReviews(token: string, placeId: string, info: any) {
   return { averageRating, totalReviewCount, newCount: fresh.length, firstSync: storedMax === null }
 }
 
-// ── Points négatifs récurrents (mots-clés) ──────────────────────────────────
-function negativeThemes(reviews: any[]) {
-  const neg = reviews.filter((r) => r.star && r.star <= 3 && r.comment)
-  const acc = THEMES.map((t) => ({ key: t.key, count: 0, samples: [] as string[] }))
-  for (const r of neg) {
+// ── Points récurrents par mots-clés (négatifs ou positifs) ──────────────────
+// predicate sélectionne la tranche de notes ; total = avis de la tranche (avec
+// ou sans texte) ; analyzedCount = ceux contenant un commentaire analysable.
+function analyzeThemes(
+  reviews: any[],
+  themes: { key: string; kw: string[] }[],
+  predicate: (s: number) => boolean,
+) {
+  const inBucket = reviews.filter((r) => predicate(r.star ?? 0))
+  const withText = inBucket.filter((r) => r.comment)
+  const acc = themes.map((t) => ({ key: t.key, count: 0, lastDate: null as string | null, samples: [] as any[] }))
+  for (const r of withText) {
     const c = norm(r.comment)
-    THEMES.forEach((t, i) => {
+    const d = r.create_time ?? r.update_time ?? null
+    themes.forEach((t, i) => {
       if (t.kw.some((k) => c.includes(norm(k)))) {
         acc[i].count++
-        if (acc[i].samples.length < 2) acc[i].samples.push(String(r.comment).replace(/\s+/g, " ").slice(0, 160))
+        if (d && (!acc[i].lastDate || new Date(d) > new Date(acc[i].lastDate as string))) acc[i].lastDate = d
+        if (acc[i].samples.length < 3) acc[i].samples.push({ text: String(r.comment).replace(/\s+/g, " ").trim(), date: d, stars: r.star ?? 0 })
       }
     })
   }
-  return { negativeCount: neg.length, themes: acc.filter((t) => t.count > 0).sort((a, b) => b.count - a.count) }
+  return {
+    total: inBucket.length,
+    analyzedCount: withText.length,
+    themes: acc.filter((t) => t.count > 0).sort((a, b) => b.count - a.count),
+  }
 }
 
 // ── Agrégats sur l'ensemble stocké ───────────────────────────────────────────
@@ -206,7 +229,8 @@ function summarize(placeId: string, info: any, stored: any[], sync: any) {
     distribution: dist, replied,
     responseRate: stored.length ? Math.round((replied / stored.length) * 100) : 0,
     negativeNoReply,
-    negative: negativeThemes(stored),
+    negative: analyzeThemes(stored, NEG_THEMES, (s) => s > 0 && s <= 3),
+    positive: analyzeThemes(stored, POS_THEMES, (s) => s >= 4),
     recent, newSinceLast: sync.newCount, ts: Date.now(),
   }
 }
