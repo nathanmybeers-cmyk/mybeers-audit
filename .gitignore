@@ -9,3 +9,6 @@ test_gmb.py
 SPEC_MYBEERS_OFFICIEL.md
 TOKENS_PROCESS.txt
 supabase_officiel.sql
+
+# macOS
+.DS_Store

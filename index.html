@@ -108,6 +108,7 @@ table.t tr:hover td{background:var(--bg3)}
 .tab.tab-ig.active{background:var(--orchid-bg);color:var(--orchid-tx);border-color:var(--orchid);font-weight:600}
 .tab.tab-fb.active{background:var(--blue-bg);color:var(--blue-tx);border-color:var(--blue);font-weight:600}
 .tab.tab-ads.active{background:var(--green-bg);color:var(--green-tx);border-color:var(--green);font-weight:600}
+.tab.tab-gmb.active{background:#FDF3D7;color:#7A5B00;border-color:#F5B400;font-weight:600}
 .off-ig .kc{background:var(--orchid-bg)}
 .off-ig .card{border-color:color-mix(in srgb, var(--orchid) 25%, var(--bd))}
 .off-ig .ct{color:var(--orchid-tx)}
@@ -563,6 +564,7 @@ async function exportPDF(pdvId) {
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://kndaguwcpypcmjpkxpbw.supabase.co'
+const AVIS_GOOGLE_URL = 'https://kndaguwcpypcmjpkxpbw.supabase.co/functions/v1/avis-google'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZGFndXdjcHlwY21qcGt4cGJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NDk2OTUsImV4cCI6MjA5MjMyNTY5NX0.GIcXljp3p4YHIJI5vWzc_vY8xglu_rhit1cWZ1U5WHo'
 
 async function supabaseFetch(path, options={}) {
@@ -1326,8 +1328,119 @@ async function renderDash(pdvId, force, period) {
   const body = document.getElementById('dash-body')
   if(!body) return
 
-  body.innerHTML = `<div id="t-ads">${renderAdsTab(ads, pdv, adsAll)}</div>`
-  setTimeout(()=>{ if(adsAll && !adsAll.error && Array.isArray(adsAll)) drawAdsChart(computeTypes(getFiltered(ads, adsAll))) }, 100)
+  const dashTab = _dashTab[pdvId] || 'ads'
+  body.innerHTML = `
+    <div class="tabs">
+      <div class="tab tab-fb${dashTab==='ads'?' active':''}" onclick="setDashTab('${pdvId}','ads')">Publicités</div>
+      <div class="tab tab-gmb${dashTab==='gmb'?' active':''}" onclick="setDashTab('${pdvId}','gmb')">Avis Google</div>
+    </div>
+    <div id="dash-tab-body"></div>`
+  const tb = document.getElementById('dash-tab-body')
+  if(dashTab === 'gmb'){
+    renderAvisGoogleTab(pdv)
+  } else {
+    tb.innerHTML = `<div id="t-ads">${renderAdsTab(ads, pdv, adsAll)}</div>`
+    setTimeout(()=>{ if(adsAll && !adsAll.error && Array.isArray(adsAll)) drawAdsChart(computeTypes(getFiltered(ads, adsAll))) }, 100)
+  }
+}
+
+let _dashTab = {}
+function setDashTab(pdvId, tab) {
+  _dashTab[pdvId] = tab
+  renderDash(pdvId, false)
+}
+
+// ── AVIS GOOGLE ──────────────────────────────────────────────────────────────
+async function loadAvisGoogle(force) {
+  const c = force ? null : DB.getCache('gmb', 'all')
+  if(c) return c
+  const r = await fetch(AVIS_GOOGLE_URL + (force ? '?force=1' : ''), {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  })
+  const j = await r.json()
+  if(j.error) throw new Error(j.error)
+  DB.setCache('gmb', 'all', j)
+  return j
+}
+
+function avisStars(n) {
+  const full = Math.round(n)
+  return '<span style="color:#F5B400;letter-spacing:1px">' + '★'.repeat(full) + '<span style="color:var(--bd2)">' + '★'.repeat(5-full) + '</span></span>'
+}
+
+async function renderAvisGoogleTab(pdv) {
+  const tb = document.getElementById('dash-tab-body')
+  if(!tb) return
+  if(!pdv.gmb_place_id){
+    tb.innerHTML = `<div class="card"><div class="warn-box">Aucune fiche Google configurée pour cet établissement. Renseignez le <strong>Place ID Google</strong> dans « Gérer les établissements ».</div></div>`
+    return
+  }
+  tb.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span>Chargement des avis Google…</div>`
+  let data
+  try {
+    data = await loadAvisGoogle(false)
+  } catch(e) {
+    tb.innerHTML = `<div class="card"><div class="warn-box"><strong>Avis Google indisponibles :</strong> ${escHtml(e.message)}<br><span style="font-size:11px">La connexion Google n'est peut-être pas encore configurée (voir AVIS_GOOGLE_SETUP.md).</span></div></div>`
+    return
+  }
+  const loc = (data.locations||[]).find(l => l.placeId === pdv.gmb_place_id)
+  if(!loc){
+    tb.innerHTML = `<div class="card"><div class="warn-box">Cette fiche n'a pas été trouvée parmi les établissements accessibles via le compte Google. Vérifiez le Place ID, ou que le compte est bien gestionnaire de la fiche.</div></div>`
+    return
+  }
+  tb.innerHTML = avisGoogleBody(loc, data.ts)
+  setTimeout(()=>drawAvisChart(loc), 60)
+}
+
+function avisGoogleBody(loc, ts) {
+  const d = loc.distribution || {}
+  const totalDist = [1,2,3,4,5].reduce((a,k)=>a+(d[k]||0),0) || 1
+  const bar = k => {
+    const pct = Math.round((d[k]||0)/totalDist*100)
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+      <span style="width:34px;color:var(--tx2)">${k} ★</span>
+      <div style="flex:1;background:var(--bg3);border-radius:4px;height:10px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#F5B400"></div></div>
+      <span style="width:54px;text-align:right;color:var(--tx2)">${fmt(d[k]||0)}</span>
+    </div>`
+  }
+  const recent = (loc.recent||[]).map(rv => `
+    <div style="padding:10px 0;border-bottom:0.5px solid var(--bd)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <strong style="font-size:12px">${escHtml(rv.author)}</strong>
+        <span style="font-size:11px;color:var(--tx3)">${rv.date?new Date(rv.date).toLocaleDateString('fr-FR'):''}</span>
+      </div>
+      <div style="font-size:12px;margin:2px 0">${avisStars(rv.stars)} ${rv.replied?'<span class="badge bg" style="font-size:9px">Répondu</span>':(rv.stars<=3?'<span class="badge br" style="font-size:9px">Sans réponse</span>':'')}</div>
+      ${rv.comment?`<div style="font-size:12px;color:var(--tx2);line-height:1.5">${escHtml(rv.comment)}</div>`:'<div style="font-size:12px;color:var(--tx3)">(sans commentaire)</div>'}
+    </div>`).join('') || '<p class="empty">Aucun avis récent.</p>'
+
+  return `
+    <div class="kgrid" style="margin-bottom:1.25rem">
+      <div class="kc"><div class="kl">Note moyenne</div><div class="kv">${loc.averageRating?loc.averageRating.toFixed(1).replace('.',','):'—'} <span style="font-size:14px">${avisStars(loc.averageRating)}</span></div><div class="ks">${escHtml(loc.title)}</div></div>
+      <div class="kc"><div class="kl">Nombre d'avis</div><div class="kv">${fmt(loc.totalReviewCount)}</div></div>
+      <div class="kc"><div class="kl">Taux de réponse</div><div class="kv" style="color:${loc.responseRate>=70?'var(--green)':loc.responseRate>=40?'var(--amber)':'var(--red)'}">${loc.responseRate}%</div><div class="ks">sur ${fmt(loc.fetchedCount)} avis analysés</div></div>
+      <div class="kc"><div class="kl">Négatifs sans réponse</div><div class="kv" style="color:${loc.negativeNoReply>0?'var(--red)':'var(--green)'}">${fmt(loc.negativeNoReply)}</div><div class="ks">≤ 3 ★ sans réponse</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+      <div class="card"><div class="ct">Répartition par étoiles</div>${[5,4,3,2,1].map(bar).join('')}<div class="chart-wrap" style="height:160px;margin-top:1rem"><canvas id="avis-chart"></canvas></div></div>
+      <div class="card"><div class="ct">Avis récents</div>${recent}</div>
+    </div>
+    <p style="font-size:11px;color:var(--tx3)">Données Google${ts?' du '+new Date(ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}. Répartition et taux de réponse calculés sur les ${fmt(loc.fetchedCount)} avis les plus récents récupérés.</p>`
+}
+
+function drawAvisChart(loc) {
+  const ctx = document.getElementById('avis-chart')
+  if(!ctx) return
+  const d = loc.distribution || {}
+  if(charts['avis']) charts['avis'].destroy()
+  charts['avis'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['5 ★','4 ★','3 ★','2 ★','1 ★'],
+      datasets: [{ data: [d[5]||0,d[4]||0,d[3]||0,d[2]||0,d[1]||0],
+        backgroundColor: ['#1a8a4a','#7cc05a','#F5B400','#EF7E27','#E24B4A'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 12 } } } }
+  })
 }
 
 
