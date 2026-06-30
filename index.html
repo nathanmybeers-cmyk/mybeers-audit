@@ -1399,6 +1399,20 @@ function avisGoogleBody(loc, ts) {
       <span style="width:54px;text-align:right;color:var(--tx2)">${fmt(d[k]||0)}</span>
     </div>`
   }
+  const neg = loc.negative || {negativeCount:0, themes:[]}
+  const maxTheme = neg.themes && neg.themes.length ? neg.themes[0].count : 1
+  const negThemes = (neg.themes && neg.themes.length) ? neg.themes.map(t => {
+    const pct = Math.round(t.count/maxTheme*100)
+    const sample = (t.samples && t.samples[0]) ? `<div style="font-size:11px;color:var(--tx3);font-style:italic;margin-top:2px">« ${escHtml(t.samples[0])} »</div>` : ''
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+        <span style="flex:1;font-weight:500">${escHtml(t.key)}</span>
+        <div style="width:120px;background:var(--bg3);border-radius:4px;height:9px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--red)"></div></div>
+        <span style="width:54px;text-align:right;color:var(--tx2)">${t.count} avis</span>
+      </div>${sample}
+    </div>`
+  }).join('') : '<p class="empty">Aucun point négatif récurrent détecté.</p>'
+
   const recent = (loc.recent||[]).map(rv => `
     <div style="padding:10px 0;border-bottom:0.5px solid var(--bd)">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
@@ -1420,7 +1434,11 @@ function avisGoogleBody(loc, ts) {
       <div class="card"><div class="ct">Répartition par étoiles</div>${[5,4,3,2,1].map(bar).join('')}<div class="chart-wrap" style="height:160px;margin-top:1rem"><canvas id="avis-chart"></canvas></div></div>
       <div class="card"><div class="ct">Avis récents</div>${recent}</div>
     </div>
-    <p style="font-size:11px;color:var(--tx3)">Données Google${ts?' du '+new Date(ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}. Répartition et taux de réponse calculés sur les ${fmt(loc.fetchedCount)} avis les plus récents récupérés.</p>`
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Points négatifs récurrents <span style="font-weight:400;font-size:11px;color:var(--tx3)">— d'après ${fmt(neg.negativeCount)} avis ≤ 3 ★</span></div>
+      ${negThemes}
+    </div>
+    <p style="font-size:11px;color:var(--tx3)">Données Google${ts?' du '+new Date(ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}. Avis stockés et complétés au fil du temps dans Supabase${loc.newSinceLast?` (${fmt(loc.newSinceLast)} nouveau${loc.newSinceLast>1?'x':''} depuis la dernière fois)`:''}. Répartition, taux de réponse et points négatifs calculés sur ${fmt(loc.fetchedCount)} avis.</p>`
 }
 
 function drawAvisChart(loc) {
