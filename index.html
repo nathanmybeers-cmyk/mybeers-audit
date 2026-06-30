@@ -2374,7 +2374,6 @@ function compGoogleResume(d){
   if(!n) return `<div class="card"><p class="empty">Aucune donnée d'avis disponible.</p></div>`
   const avgNote = e.reduce((a,x)=>a+(x.averageRating||0),0)/n
   const avgResp = e.reduce((a,x)=>a+(x.responseRate||0),0)/n
-  const totalAvis = e.reduce((a,x)=>a+(x.totalReviewCount||0),0)
   const nr = x => compRound1(x.averageRating)   // palier basé sur la note arrondie affichée
   const lvlHigh = e.filter(x=>nr(x)>=4.0).length
   const lvlMid  = e.filter(x=>nr(x)>=3.5 && nr(x)<4.0).length
@@ -2387,12 +2386,12 @@ function compGoogleResume(d){
 
   const kpi = (label,val,sub,color) => `<div class="kc" style="background:${color};color:#fff"><div class="kl" style="color:rgba(255,255,255,.85)">${label}</div><div class="kv" style="color:#fff">${val}</div>${sub?`<div class="ks" style="color:rgba(255,255,255,.8)">${sub}</div>`:''}</div>`
   // bande niveau de note
-  const starRows = [5,4,3,2,1].map(s => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
-      <span style="width:26px;font-size:12px;font-weight:600;flex-shrink:0">${s}★</span>
-      <div style="flex:0 0 130px;background:var(--bg3);border-radius:4px;height:13px;overflow:hidden;flex-shrink:0"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
-      <span style="flex:1;font-size:12px"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
-    </div>`).join('')
+  const starRows = `<div style="padding:6px 0">` + [5,4,3,2,1].map(s => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+      <span style="width:30px;font-size:13px;font-weight:600;flex-shrink:0">${s}★</span>
+      <div style="flex:1;background:var(--bg3);border-radius:5px;height:18px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
+      <span style="flex-shrink:0;font-size:13px;white-space:nowrap"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
+    </div>`).join('') + `</div>`
   const medal = ['#E6A817','#9CA3AF','#B45309']
   const podium = top3.map((x,i) => `
     <div class="card" style="padding:0;overflow:hidden">
@@ -2417,13 +2416,13 @@ function compGoogleResume(d){
       ${kpi('Établissements audités', fmt(n), '', 'var(--blue)')}
       ${kpi('Note moyenne réseau', avgNote.toFixed(2).replace('.',',')+'★', '', 'var(--green)')}
       ${kpi('Taux de réponse moyen', Math.round(avgResp)+' %', '', 'var(--amber)')}
-      ${kpi('Avis collectés au total', fmt(totalAvis), '', 'var(--purple)')}
+      ${kpi('Avis collectés au total', fmt(totStars), '', 'var(--purple)')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
       <div class="card"><div class="ct">Répartition par niveau de note <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(n)} établissements</span></div>
         <div class="chart-wrap" style="height:230px"><canvas id="comp-niveau-chart"></canvas></div>
       </div>
-      <div class="card"><div class="ct">Répartition par nombre d'étoiles <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(totStars)} avis analysés</span></div>${starRows}</div>
+      <div class="card"><div class="ct">Répartition par nombre d'étoiles <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(totStars)} avis</span></div>${starRows}</div>
     </div>
     <div class="card" style="margin-bottom:1.25rem">
       <div class="ct">Podium — Top 3</div>
@@ -2440,7 +2439,8 @@ function compGoogleClassement(d){
   if(!ranked.length) return `<div class="card"><p class="empty">Aucune donnée d'avis disponible.</p></div>`
   const rows = ranked.map((x,i) => {
     const dist = x.distribution || {}
-    const tot = [1,2,3,4,5].reduce((a,s)=>a+(dist[s]||0),0) || 1
+    const real = [1,2,3,4,5].reduce((a,s)=>a+(dist[s]||0),0)   // avis réellement recensés
+    const tot = real || 1
     const segs = [5,4,3,2,1].map(s => (dist[s]||0)>0 ? `<div style="width:${(dist[s]/tot*100)}%;height:100%;background:${COMP_STARC[s]}"></div>` : '').join('')
     const counts = [5,4,3,2,1].map(s => `<span style="display:inline-block;min-width:84px"><span style="color:var(--tx3)">${s}★</span> ${fmt(dist[s]||0)} (${Math.round((dist[s]||0)/tot*100)}%)</span>`).join('')
     return `<div class="card" style="display:flex;gap:16px;align-items:center;padding:14px 16px;border-left:4px solid ${i<3?['#E6A817','#9CA3AF','#B45309'][i]:'var(--bd2)'}">
@@ -2454,7 +2454,7 @@ function compGoogleClassement(d){
         <div style="font-size:11px;color:${compRespCol(x.responseRate)}">${x.responseRate}% réponse</div>
       </div>
       <div style="flex:1;min-width:200px">
-        <div style="font-size:11px;color:var(--tx3);margin-bottom:3px">${fmt(x.totalReviewCount)} avis</div>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:3px">${fmt(real)} avis</div>
         <div style="display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--bg3);margin-bottom:5px">${segs}</div>
         <div style="font-size:11px;color:var(--tx2);display:flex;flex-wrap:wrap;gap:4px">${counts}</div>
       </div>
