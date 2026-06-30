@@ -2019,10 +2019,40 @@ let compCurrentData={}
 let _compTypeFilter=null
 let _compYear=null,_compSelectedMonths=new Set(),_compResults={}
 
+let _compMode = null            // 'ads' | 'google'
+let _compGoogleTab = 'resume'   // 'resume' | 'classement'
+let _compGoogleData = null
+
 function renderComparatif(){
-  const now=new Date(),cy=now.getFullYear()
+  _compMode = null
   document.getElementById('main').innerHTML=`
     <div class="topbar"><h1>Comparatif global</h1></div>
+    <div style="display:flex;gap:1.25rem;justify-content:center;padding:2.5rem 1rem;flex-wrap:wrap">
+      <div class="card comp-choice" onclick="compChoose('ads')" style="cursor:pointer;width:280px;text-align:center;padding:2rem 1.5rem">
+        <div style="font-size:34px">📊</div>
+        <div style="font-size:16px;font-weight:600;margin:10px 0 6px">Publicités</div>
+        <div style="font-size:12px;color:var(--tx2);line-height:1.5">Comparer les performances publicitaires Meta des établissements</div>
+      </div>
+      <div class="card comp-choice" onclick="compChoose('google')" style="cursor:pointer;width:280px;text-align:center;padding:2rem 1.5rem">
+        <div style="font-size:34px">⭐</div>
+        <div style="font-size:16px;font-weight:600;margin:10px 0 6px">Fiche Google</div>
+        <div style="font-size:12px;color:var(--tx2);line-height:1.5">Classement des avis Google Business Profile du réseau</div>
+      </div>
+    </div>`
+}
+
+function compChoose(mode){
+  _compMode = mode
+  if(mode === 'google') renderComparatifGoogle()
+  else renderComparatifAds()
+}
+
+function renderComparatifAds(){
+  const now=new Date(),cy=now.getFullYear()
+  document.getElementById('main').innerHTML=`
+    <div class="topbar"><h1>Comparatif global <span style="font-size:14px;font-weight:400;color:var(--tx2)">— Publicités</span></h1>
+      <button class="btn btn-sm" onclick="renderComparatif()">← Choix</button>
+    </div>
     <div id="comp-body" style="display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem">
       <div class="card" style="max-width:460px;width:100%;display:flex;flex-direction:column;gap:1.5rem">
         <div style="font-size:15px;font-weight:600">Sélectionner votre période</div>
@@ -2244,6 +2274,176 @@ function compRowHtml(rank,pdv,m){
     <td style="color:${sc(m.score_budget)};font-weight:500">${sp(m.score_budget)}</td>
     <td style="color:${sc(m.score_objectif)};font-weight:500">${sp(m.score_objectif)}</td>
   </tr>`
+}
+
+// ── COMPARATIF GLOBAL — FICHE GOOGLE ─────────────────────────────────────────
+const COMP_STARC = {5:'#1a8a4a',4:'#7cc05a',3:'#F5B400',2:'#EF7E27',1:'#E24B4A'}
+const compNoteCol = n => n>=4.0 ? 'var(--green)' : n>=3.5 ? 'var(--amber)' : 'var(--red)'
+const compRespCol = r => r>=70 ? 'var(--green)' : r>=40 ? 'var(--amber)' : 'var(--red)'
+const comp1 = n => (n||0).toFixed(1).replace('.',',')
+
+function compGoogleTab(tab){
+  _compGoogleTab = tab
+  document.querySelectorAll('.tabs .tab-gmb').forEach(t => t.classList.toggle('active', t.dataset.ctab === tab))
+  compGoogleRenderBody()
+}
+
+async function renderComparatifGoogle(force){
+  const cfg = (sheetConfig || DB.cfg)
+  const withPlace = cfg.filter(p => p.gmb_place_id)
+  document.getElementById('main').innerHTML = `
+    <div class="topbar">
+      <h1>Comparatif global <span style="font-size:14px;font-weight:400;color:var(--tx2)">— Fiche Google</span></h1>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="comp-g-ts" style="font-size:11px;color:var(--tx3)"></span>
+        <button class="btn btn-sm" onclick="renderComparatif()">← Choix</button>
+        <button class="btn" onclick="renderComparatifGoogle(true)">Actualiser</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-gmb${_compGoogleTab==='resume'?' active':''}" data-ctab="resume" onclick="compGoogleTab('resume')">Résumé</div>
+      <div class="tab tab-gmb${_compGoogleTab==='classement'?' active':''}" data-ctab="classement" onclick="compGoogleTab('classement')">Classement</div>
+    </div>
+    <div id="comp-g-body"><div style="padding:2rem;text-align:center;color:var(--tx2)"><span class="spin"></span><span id="comp-g-prog">Chargement…</span></div></div>`
+  if(!withPlace.length){
+    document.getElementById('comp-g-body').innerHTML = `<div class="card"><div class="warn-box">Aucun établissement n'a de fiche Google configurée. Renseignez le <strong>Place ID Google</strong> des établissements dans « Gérer les établissements ».</div></div>`
+    return
+  }
+  try {
+    let data = force ? null : DB.getCache('gmb', '_comparatif')
+    if(!data){ data = await compGoogleLoad(withPlace); DB.setCache('gmb', '_comparatif', data) }
+    _compGoogleData = data
+    const ts = document.getElementById('comp-g-ts')
+    if(ts && data.ts) ts.textContent = 'Mis à jour le ' + new Date(data.ts).toLocaleDateString('fr-FR')
+    compGoogleRenderBody()
+  } catch(e) {
+    const b = document.getElementById('comp-g-body')
+    if(b) b.innerHTML = `<div class="card"><div class="warn-box"><strong>Erreur :</strong> ${escHtml(e.message)}</div></div>`
+  }
+}
+
+async function compGoogleLoad(list){
+  const prog = t => { const el = document.getElementById('comp-g-prog'); if(el) el.textContent = t }
+  const out = [], BATCH = 5
+  for(let i=0; i<list.length; i+=BATCH){
+    prog(`Chargement des fiches Google… (${Math.min(i+BATCH, list.length)}/${list.length})`)
+    const chunk = list.slice(i, i+BATCH)
+    const res = await Promise.all(chunk.map(p =>
+      loadAvisGoogle(p.gmb_place_id, false).then(d => ({p, d})).catch(() => null)
+    ))
+    res.filter(Boolean).forEach(r => {
+      if(r.d && !r.d.error) out.push({ nom: (r.p.nom||r.d.title||'').replace('My Beers ',''), ...r.d })
+    })
+  }
+  return { etabs: out, ts: Date.now() }
+}
+
+function compGoogleRanked(etabs){
+  return [...etabs].sort((a,b) => (b.averageRating - a.averageRating) || (b.totalReviewCount - a.totalReviewCount))
+}
+
+function compGoogleRenderBody(){
+  const b = document.getElementById('comp-g-body')
+  if(!b || !_compGoogleData) return
+  b.innerHTML = _compGoogleTab === 'resume' ? compGoogleResume(_compGoogleData) : compGoogleClassement(_compGoogleData)
+}
+
+function compGoogleResume(d){
+  const e = d.etabs.filter(x => (x.totalReviewCount||0) > 0)
+  const n = e.length
+  if(!n) return `<div class="card"><p class="empty">Aucune donnée d'avis disponible.</p></div>`
+  const avgNote = e.reduce((a,x)=>a+(x.averageRating||0),0)/n
+  const avgResp = e.reduce((a,x)=>a+(x.responseRate||0),0)/n
+  const totalAvis = e.reduce((a,x)=>a+(x.totalReviewCount||0),0)
+  const lvlHigh = e.filter(x=>x.averageRating>=4.0).length
+  const lvlMid  = e.filter(x=>x.averageRating>=3.5 && x.averageRating<4.0).length
+  const lvlLow  = e.filter(x=>x.averageRating<3.5).length
+  const star = {1:0,2:0,3:0,4:0,5:0}
+  e.forEach(x => { for(let s=1;s<=5;s++) star[s] += (x.distribution?.[s]||0) })
+  const totStars = [1,2,3,4,5].reduce((a,s)=>a+star[s],0) || 1
+  const ranked = compGoogleRanked(e)
+  const top3 = ranked.slice(0,3), bottom3 = ranked.slice(-3).reverse()
+
+  const kpi = (label,val,sub,color) => `<div class="kc" style="background:${color};color:#fff"><div class="kl" style="color:rgba(255,255,255,.85)">${label}</div><div class="kv" style="color:#fff">${val}</div>${sub?`<div class="ks" style="color:rgba(255,255,255,.8)">${sub}</div>`:''}</div>`
+  // bande niveau de note
+  const seg = (c,v) => v>0 ? `<div style="width:${Math.round(v/n*100)}%;height:100%;background:${c}"></div>` : ''
+  const niveauBar = `<div style="display:flex;height:20px;border-radius:6px;overflow:hidden;margin:8px 0 6px">${seg('var(--green)',lvlHigh)}${seg('var(--amber)',lvlMid)}${seg('var(--red)',lvlLow)}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--tx2)">
+      <span><span class="off-adbar" style="background:var(--green)"></span>Note ≥ 4,0 (${lvlHigh})</span>
+      <span><span class="off-adbar" style="background:var(--amber)"></span>3,5 ≤ Note < 4,0 (${lvlMid})</span>
+      <span><span class="off-adbar" style="background:var(--red)"></span>Note < 3,5 (${lvlLow})</span>
+    </div>`
+  const maxStar = Math.max(...[1,2,3,4,5].map(s=>star[s])) || 1
+  const starRows = [5,4,3,2,1].map(s => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="width:28px;font-size:12px;font-weight:600">${s}★</span>
+      <div style="flex:1;background:var(--bg3);border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.round(star[s]/maxStar*100)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
+      <span style="width:150px;text-align:right;font-size:12px"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
+    </div>`).join('')
+  const medal = ['#E6A817','#9CA3AF','#B45309']
+  const podium = top3.map((x,i) => `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="background:${medal[i]};color:#fff;font-weight:700;text-align:center;padding:6px">#${i+1}</div>
+      <div style="text-align:center;padding:12px">
+        <div style="font-size:11px;color:var(--tx3)">My Beers</div>
+        <div style="font-weight:600;margin:2px 0">${escHtml(x.nom)}</div>
+        <div style="color:${compNoteCol(x.averageRating)};font-weight:700">${comp1(x.averageRating)} ★</div>
+      </div>
+    </div>`).join('')
+  const prio = bottom3.map(x => {
+    const rank = ranked.indexOf(x)+1
+    return `<div class="card" style="border-left:4px solid var(--red);background:var(--red-bg)">
+      <div style="font-size:11px;color:var(--tx3)">#${rank} — My Beers</div>
+      <div style="font-weight:600;margin:2px 0">${escHtml(x.nom)}</div>
+      <div style="color:var(--red);font-weight:700">${comp1(x.averageRating)} ★</div>
+    </div>`
+  }).join('')
+
+  return `
+    <div class="kgrid" style="margin-bottom:1.25rem">
+      ${kpi('Établissements audités', fmt(n), '', 'var(--blue)')}
+      ${kpi('Note moyenne réseau', avgNote.toFixed(2).replace('.',',')+'★', '', 'var(--green)')}
+      ${kpi('Taux de réponse moyen', Math.round(avgResp)+' %', '', 'var(--amber)')}
+      ${kpi('Avis collectés au total', fmt(totalAvis), '', 'var(--purple)')}
+    </div>
+    <div class="card" style="margin-bottom:1.25rem"><div class="ct">Répartition par niveau de note</div>${niveauBar}</div>
+    <div class="card" style="margin-bottom:1.25rem"><div class="ct">Répartition par nombre d'étoiles <span style="font-weight:400;font-size:11px;color:var(--tx3)">— ${fmt(totStars)} avis analysés</span></div>${starRows}</div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="ct">Podium — Top 3</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${podium}</div>
+    </div>
+    <div class="card">
+      <div class="ct" style="color:var(--red)">Établissements prioritaires <span style="font-weight:400;font-size:11px;color:var(--tx3)">— notes les plus basses</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${prio}</div>
+    </div>`
+}
+
+function compGoogleClassement(d){
+  const ranked = compGoogleRanked(d.etabs.filter(x => (x.totalReviewCount||0) > 0))
+  if(!ranked.length) return `<div class="card"><p class="empty">Aucune donnée d'avis disponible.</p></div>`
+  const rows = ranked.map((x,i) => {
+    const dist = x.distribution || {}
+    const tot = [1,2,3,4,5].reduce((a,s)=>a+(dist[s]||0),0) || 1
+    const segs = [5,4,3,2,1].map(s => (dist[s]||0)>0 ? `<div style="width:${(dist[s]/tot*100)}%;height:100%;background:${COMP_STARC[s]}"></div>` : '').join('')
+    const counts = [5,4,3,2,1].map(s => `<span style="display:inline-block;min-width:84px"><span style="color:var(--tx3)">${s}★</span> ${fmt(dist[s]||0)} (${Math.round((dist[s]||0)/tot*100)}%)</span>`).join('')
+    return `<div class="card" style="display:flex;gap:16px;align-items:center;padding:14px 16px;border-left:4px solid ${i<3?['#E6A817','#9CA3AF','#B45309'][i]:'var(--bd2)'}">
+      <div style="font-size:18px;font-weight:700;color:var(--tx3);width:42px;flex-shrink:0">#${i+1}</div>
+      <div style="width:160px;flex-shrink:0">
+        <div style="font-size:11px;color:var(--tx3)">My Beers</div>
+        <div style="font-weight:600">${escHtml(x.nom)}</div>
+      </div>
+      <div style="width:110px;flex-shrink:0">
+        <div style="font-size:17px;font-weight:700;color:${compNoteCol(x.averageRating)}">${comp1(x.averageRating)} ★</div>
+        <div style="font-size:11px;color:${compRespCol(x.responseRate)}">${x.responseRate}% réponse</div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:3px">${fmt(x.totalReviewCount)} avis</div>
+        <div style="display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--bg3);margin-bottom:5px">${segs}</div>
+        <div style="font-size:11px;color:var(--tx2);display:flex;flex-wrap:wrap;gap:4px">${counts}</div>
+      </div>
+    </div>`
+  }).join('')
+  return `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`
 }
 
 // ── MY BEERS OFFICIEL ──────────────────────────────────────────────────────
