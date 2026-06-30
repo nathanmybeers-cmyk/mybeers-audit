@@ -2389,7 +2389,7 @@ function compGoogleResume(d){
   const starRows = `<div style="padding:6px 0">` + [5,4,3,2,1].map(s => `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
       <span style="width:30px;font-size:13px;font-weight:600;flex-shrink:0">${s}★</span>
-      <div style="flex:1;background:var(--bg3);border-radius:5px;height:18px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
+      <div style="flex:0 0 240px;background:var(--bg3);border-radius:5px;height:18px;overflow:hidden"><div style="width:${(star[s]/totStars*100).toFixed(1)}%;height:100%;background:${COMP_STARC[s]}"></div></div>
       <span style="flex-shrink:0;font-size:13px;white-space:nowrap"><strong>${fmt(star[s])}</strong> (${Math.round(star[s]/totStars*100)}%) <span style="color:var(--tx3)">· moy. ${comp1(star[s]/n)}/établ.</span></span>
     </div>`).join('') + `</div>`
   const medal = ['#E6A817','#9CA3AF','#B45309']
