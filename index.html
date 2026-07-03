@@ -1496,6 +1496,16 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
       detailTr.innerHTML = `<td colspan="${cols}" style="padding:.75rem 1.25rem;background:var(--bg3);font-size:12px;color:var(--tx3)">Aucun ensemble de publicités trouvé.</td>`
       return
     }
+    // Carte des Pages Facebook connues → ville (toutes les fiches configurées)
+    // Permet de nommer le ciblage « autour de la Page de l'établissement » (audiences Advantage+)
+    const pageMap = {}
+    ;(sheetConfig || DB.cfg).forEach(p => { if(p.fb_page_id) pageMap[p.fb_page_id] = (p.ville || (p.nom||'').replace('My Beers ','')) })
+    const placeName = pl => {
+      if (pl.name) return pl.name.split(',')[0].trim()
+      if (pageMap[pl.key]) return pageMap[pl.key]
+      if (pl.key === pdv.fb_page_id || pl.key === pdv.filter_page_id) return pdv.ville || (pdv.nom||'').replace('My Beers ','')
+      return 'Établissement'
+    }
     const fmtGeo = t => {
       const gl = t.geo_locations || {}
       if (gl.custom_locations?.length) return gl.custom_locations.map(c => {
@@ -1504,6 +1514,7 @@ async function toggleAudienceRow(trEl, campaignId, pdvId) {
       }).join(', ')
       if (gl.cities?.length) return gl.cities.map(c => `${c.name}${c.radius ? ` +${c.radius}km` : ''}`).join(', ')
       if (gl.regions?.length) return gl.regions.map(r => r.name).join(', ')
+      if (gl.places?.length) return gl.places.map(pl => `${placeName(pl)}${pl.radius ? ` +${pl.radius}km` : ''}`).join(', ')
       if (gl.countries?.length) return gl.countries.join(', ')
       return '—'
     }
