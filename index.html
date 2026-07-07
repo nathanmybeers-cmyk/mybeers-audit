@@ -695,7 +695,7 @@ const TYPE_DEFS = [
   {label:'Beer Pong',     keys:['beer pong','pong','championnat','🏓']},
   {label:'Fléchettes',    keys:['fléchettes','flechettes','fléchette','flechette','tournoi de fl','🎯']},
   {label:'Karaoke',       keys:['karaoké','karaoke']},
-  {label:'SBK',           keys:['sbk']},
+  {label:'SBK',           keys:['sbk','latino','latina']},
   {label:'Soirée',        keys:['open dj set','dj set','full moon','ground room session','craquage','opening']},
   {label:'Crush',         keys:['crush','célib','celib','célibataire','celibataire']},
   {label:'Sport',         keys:['vs ','versus','match','foot','rugby','ligue','league','⚽','🏉','🆚']},
@@ -709,6 +709,8 @@ const TYPE_COLORS = {
   'Club Mix':      'ba', 'Fléchettes':    'ba', 'Open Mix':    'ba',
   'Karaoke':       'bg', 'Sport':         'bg', 'Crush':       'bg',
   'SBK':           'bg', 'Comedy Club':   'bg', 'Flash Tattoo':'bg', 'Poker': 'bg',
+  'Saint-Patrick': 'bg',
+  'Blind test':    'bpu',
   'Soirée':        'br',
   'Divers':        'bb',
 }
@@ -737,9 +739,32 @@ function normalizeUnicode(s) {
   })
 }
 
-function detectType(name) {
-  const n = normalizeUnicode(name||'').toLowerCase()
-  const found = TYPE_DEFS.find(t=>t.keys.some(k=>n.includes(k)))
+// Détection du type — ordre de priorité (le 1er qui matche gagne) :
+//  1. Sport (🆚, ⚽…)                        5. « Party » (sauf Karaoke/Crush) → Soirée
+//  2. 17 mars → Saint-Patrick                6. « Blind test » (hors mardi/mercredi)
+//  3. « Quiz » → Apéro Quiz                  7. Mardi non-sport → Apéro Quiz
+//  4. Soirées nommées (Génération 2000…)     8. Détection standard (TYPE_DEFS)
+function detectType(name, dateStop) {
+  const n  = normalizeUnicode(name||'').toLowerCase()
+  const na = n.replace(/[\u0300-\u036f]/g,'')   // insensible aux accents (é→e)
+  const has = k => na.includes(k)
+  const d = dateStop ? new Date(dateStop) : null
+  const dow = d ? d.getDay() : null             // 0=dim … 2=mardi, 3=mercredi, 5=vendredi
+  const isTue = dow===2, isWed = dow===3
+  const isMar17 = !!d && d.getMonth()===2 && d.getDate()===17
+
+  const SPORT = (TYPE_DEFS.find(t=>t.label==='Sport')||{}).keys || []
+  if(SPORT.some(has)) return 'Sport'                                   // 1
+  if(isMar17) return 'Saint-Patrick'                                   // 2
+  if(has('quiz')) return 'Apéro Quiz'                                  // 3
+  if(has('generation 2000')) return 'Soirée'                          // 4
+  if(has('fuego latino')) return 'Soirée'
+  if(has('inauguration')) return 'Soirée'
+  if(has('copacabana')) return 'Soirée'
+  if(has('party') && !has('karaoke') && !has('crush')) return 'Soirée' // 5
+  if(has('blind test')) return (isTue || isWed) ? 'Apéro Quiz' : 'Blind test' // 6
+  if(isTue) return 'Apéro Quiz'                                        // 7
+  const found = TYPE_DEFS.find(t=>t.keys.some(k=>n.includes(k)))       // 8
   return found ? found.label : null
 }
 
@@ -748,17 +773,12 @@ function computeTypes(rows) {
   const result = rows.map(r => {
     const isFriday   = r.date_stop ? new Date(r.date_stop).getDay()===5 : false
     const isSaturday = r.date_stop ? new Date(r.date_stop).getDay()===6 : false
-    const isTuesday  = r.date_stop ? new Date(r.date_stop).getDay()===2 : false
-    const found = detectType(r.campaign_name||'')
-    let type = found || (isFriday ? 'Soirée' : isTuesday ? 'Apéro Quiz' : 'Divers')
+    const found = detectType(r.campaign_name||'', r.date_stop)   // gère mardi/mercredi/17 mars
+    let type = found || (isFriday ? 'Soirée' : 'Divers')
     // Règle spéciale : Célib détecté mais boost finit un vendredi → Soirée
     const n = normalizeUnicode(r.campaign_name||'').toLowerCase()
     if(type === 'Crush' && isFriday && (n.includes('célib') || n.includes('celib'))) {
       type = 'Soirée'
-    }
-    // Règle mardi : Karaoke détecté sans le mot "karaoké/karaoke" (ex : via emoji) → Apéro Quiz
-    if(isTuesday && type === 'Karaoke' && !n.includes('karaoké') && !n.includes('karaoke')) {
-      type = 'Apéro Quiz'
     }
     // Règles émoji/mot-clé en fallback (Divers ou Soirée par défaut, sauf si objectif Événement)
     if(!found && (type === 'Divers' || type === 'Soirée') && r.objective !== 'EVENT_RESPONSES') {
@@ -1899,6 +1919,7 @@ function drawAdsChart(rows) {
     'Club Mix':'#EF9F27','Fléchettes':'#EF9F27',
     'Karaoke':'#2cb5b5','Sport':'#2cb5b5','Crush':'#2cb5b5',
     'SBK':'#2cb5b5','Comedy Club':'#2cb5b5','Flash Tattoo':'#2cb5b5','Poker':'#2cb5b5',
+    'Saint-Patrick':'#1a8a4a','Blind test':'#7F77DD',
     'Soirée':'#E24B4A','Divers':'#378ADD',
   }
   const colors = labels.map(l=>colorMap[byType[l].type]||'#888')
