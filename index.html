@@ -1270,10 +1270,29 @@ async function loadAds(pdv, force, period) {
     // Filtrer les insights par les campaign_ids de la bonne page (compte partagé)
     if(allowedCampaignIds) insights = insights.filter(r => allowedCampaignIds.has(r.campaign_id))
 
+    // Diffusion RÉELLE par plateforme de chaque campagne (vérité terrain, gère les placements
+    // automatiques/Advantage+ où une seule campagne diffuse sur Facebook ET Instagram)
+    const platMap = {}  // campaign_id → Set des plateformes ayant réellement dépensé
+    for (const accountId of accountIds) {
+      let purl = `${accountId}/insights?fields=campaign_id,spend&breakdowns=publisher_platform&${insightParams}&level=campaign&limit=200`
+      let guard = 0
+      while(purl && guard++ < 20) {
+        try {
+          const d = await fetchMeta(purl, pdv.fb_token)
+          ;(d.data||[]).forEach(r => {
+            if((parseFloat(r.spend)||0) <= 0) return
+            ;(platMap[r.campaign_id] = platMap[r.campaign_id] || new Set()).add(r.publisher_platform)
+          })
+          purl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+        } catch(e){ console.warn('[platform] breakdown:', e.message); break }
+      }
+    }
+
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
       return {
         ...r,
+        _platforms: [...(platMap[r.campaign_id] || [])],
         campaign_name: camp.name || r.campaign_id || '—',
         date_start: camp.start_time ? camp.start_time.split('T')[0] : null,
         date_stop: camp.stop_time ? camp.stop_time.split('T')[0] : null,
@@ -1759,9 +1778,20 @@ function renderAdsTab(data, pdv, allData) {
     // Badge plateforme
     const platKey = `${type}_${r.date_stop}`
     const platCount = platGroupMap[platKey]?.length || 1
+    const comboBadge = `<span style="display:inline-flex;border-radius:9px;overflow:hidden;font-size:11px;font-weight:500">
+        <span style="background:var(--pink-bg);color:var(--pink-tx);padding:2px 6px">Insta</span>
+        <span style="background:var(--blue-bg);color:var(--blue-tx);padding:2px 6px">FB</span>
+      </span>`
     let platBadge
+    const realPlats = r._platforms || []
+    const hasFB = realPlats.includes('facebook'), hasIG = realPlats.includes('instagram')
     if(objLabel === 'Événement') {
       platBadge = `<span class="badge bb">Event FB</span>`
+    } else if(realPlats.length) {
+      // Diffusion réelle (fiable) : gère les placements automatiques FB + Instagram
+      platBadge = (hasFB && hasIG) ? comboBadge
+        : hasIG ? `<span class="badge bpi">Instagram</span>`
+        : `<span class="badge bb">Facebook</span>`
     } else if(objLabel === 'Trafic') {
       platBadge = `<span class="badge bpi">Instagram</span>`
     } else if(platCount === 1 && type !== 'Soirée') {
