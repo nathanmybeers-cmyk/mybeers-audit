@@ -490,8 +490,14 @@ async function exportPDF(pdvId) {
     const name = cleanNamePDF(r.campaign_name||'')
     const isIG = (r.campaign_name||'').toLowerCase().includes('instagram')
     const ol_plat = objMap[r.objective]||r.objective||'—'
+    const rp = r._platforms || []
     let plat
     if(ol_plat === 'Événement') plat = 'Event FB'
+    else if(rp.length) {
+      // Diffusion réelle
+      const fb = rp.includes('facebook'), ig = rp.includes('instagram')
+      plat = (fb && ig) ? 'Insta+FB' : ig ? 'Instagram' : 'Facebook'
+    }
     else if(ol_plat === 'Trafic') plat = 'Instagram'
     else if(isIG) plat = 'Instagram'
     else if(r._type === 'Soirée') {
@@ -2039,7 +2045,7 @@ function _metricsFromTypedRows(rows){
   rows.forEach(r=>{const key=`${r._type}_${r.date_stop}`;if(!platGroupMap[key])platGroupMap[key]=[];platGroupMap[key].push(r.campaign_id)})
   const soireeGroupMapC={}
   rows.forEach(r=>{if(r._type!=='Soirée')return;const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return;const key=`${r._type}_${r.date_stop}`;if(!soireeGroupMapC[key])soireeGroupMapC[key]={hasInstagram:false,remaining:[]};const isIGr=(r.campaign_name||'').toLowerCase().includes('instagram');if(ol==='Trafic'||isIGr){soireeGroupMapC[key].hasInstagram=true}else{soireeGroupMapC[key].remaining.push({id:r.campaign_id,reach:parseInt(r.reach)||0})}})
-  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Événement')return'event_fb';if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeGroupMapC[`${r._type}_${r.date_stop}`];if(g&&g.hasInstagram)return'facebook';if(g&&g.remaining.length===1)return'insta_fb';if(g&&g.remaining.length===2){const s=[...g.remaining].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
+  const getPlatform=r=>{const ol=objMap[r.objective]||r.objective||'—';if(ol==='Événement')return'event_fb';const rp=r._platforms||[];if(rp.length){const fb=rp.includes('facebook'),ig=rp.includes('instagram');return(fb&&ig)?'insta_fb':ig?'instagram':'facebook'}const isIG=(r.campaign_name||'').toLowerCase().includes('instagram');const platCount=platGroupMap[`${r._type}_${r.date_stop}`]?.length||1;if(ol==='Trafic')return'instagram';if(platCount===1&&r._type!=='Soirée')return'insta_fb';if(isIG)return'instagram';if(r._type==='Soirée'){const g=soireeGroupMapC[`${r._type}_${r.date_stop}`];if(g&&g.hasInstagram)return'facebook';if(g&&g.remaining.length===1)return'insta_fb';if(g&&g.remaining.length===2){const s=[...g.remaining].sort((a,b)=>a.reach-b.reach||a.id.localeCompare(b.id));return s[0].id===r.campaign_id?'instagram':'facebook'}}return'facebook'}
   const nb_facebook=rows.filter(r=>getPlatform(r)==='facebook').length
   const nb_instagram=rows.filter(r=>getPlatform(r)==='instagram').length
   const nb_insta_fb=rows.filter(r=>getPlatform(r)==='insta_fb').length
