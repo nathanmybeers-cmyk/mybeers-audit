@@ -1429,8 +1429,119 @@ async function renderAvisGoogleTab(pdv, force) {
     tb.innerHTML = `<div class="card"><div class="warn-box"><strong>Avis Google indisponibles :</strong> ${escHtml(e.message)}<br><span style="font-size:11px">La connexion Google n'est peut-être pas encore configurée (voir AVIS_GOOGLE_SETUP.md).</span></div></div>`
     return
   }
+  _avisCurrent = { loc, pdv }
   tb.innerHTML = avisGoogleBody(loc, loc.ts)
   setTimeout(()=>drawAvisChart(loc), 60)
+}
+
+let _avisCurrent = null
+
+// La police PDF (WinAnsi) ne gère ni les emojis ni ★/≤ : on nettoie le texte
+const pdfClean = s => (s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{2264}\u{2265}\u{FE0F}\u{200D}]/gu,'').replace(/\s+/g,' ').trim()
+
+// Export d'un audit PDF (4 pages) calqué sur la fiche d'audit Google Business Profile
+function exportAvisPDF(){
+  if(!_avisCurrent || !_avisCurrent.loc){ alert('Aucune donnée à exporter.'); return }
+  const { loc, pdv } = _avisCurrent
+  const { jsPDF } = window.jspdf
+  const doc = new jsPDF({ unit:'mm', format:'a4' })
+  const W=210, M=15
+  const NAVY=[26,42,62], PURPLE=[127,119,221], GREEN=[26,138,74], RED=[226,75,74], DARK=[26,26,26], GREY=[110,110,110], LIGHT=[238,238,238]
+  const STAR={5:[26,138,74],4:[124,192,90],3:[245,180,0],2:[239,126,39],1:[226,75,74]}
+  const dateStr = loc.ts ? new Date(loc.ts).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')
+  const fmtN = n => (n==null||isNaN(n))?'—':Number(n).toLocaleString('fr-FR')
+  const note = loc.averageRating ? loc.averageRating.toFixed(1).replace('.',',') : '—'
+
+  function header(sub){
+    doc.setFillColor(...NAVY); doc.rect(0,0,W,32,'F')
+    ;[[66,133,244],[234,67,53],[251,188,5],[52,168,83]].forEach((c,i)=>{ doc.setFillColor(...c); doc.circle(M+3+i*5,9,1.5,'F') })
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16)
+    doc.text('Analyse Google Business Profile', M, 22)
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(180,195,215)
+    doc.text(sub, M, 28); doc.text('Date : '+dateStr, W-M, 28, {align:'right'})
+  }
+  function footer(p){ doc.setFontSize(8); doc.setTextColor(...GREY)
+    doc.text('Audit Google Business Profile', M, 290); doc.text('Page '+p+' / 4', W-M, 290, {align:'right'}) }
+  function band(y,txt,color){ doc.setFillColor(...color); doc.rect(M,y,W-2*M,9,'F')
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(txt,M+3,y+6.2); return y+14 }
+
+  // PAGE 1
+  header("Fiche d'audit — établissement"); let y=44
+  doc.setFillColor(238,243,251); doc.rect(M,y,W-2*M,20,'F')
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...DARK); doc.text('Établissement :', M+3, y+8)
+  doc.setTextColor(55,120,180); doc.text(loc.title||pdv.nom||'—', M+42, y+8)
+  doc.setTextColor(...DARK); doc.text('Adresse :', M+3, y+15)
+  doc.setFont('helvetica','normal'); doc.setTextColor(...GREY); doc.text(loc.address||pdv.ville||'—', M+42, y+15)
+  y+=30; y=band(y,'Avis clients',PURPLE)
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...DARK); doc.text('Note globale :', M+3, y+2)
+  const appr = loc.averageRating>=4.5?'(excellente note)':loc.averageRating>=4?'(bonne note)':loc.averageRating>=3.5?'(note correcte)':'(note à surveiller)'
+  doc.setTextColor(...GREEN); doc.setFontSize(15); doc.text(note+' / 5', M+45, y+3)
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(appr, M+82, y+2)
+  y+=13; doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...DARK)
+  doc.text("Nombre total d'avis :", M+3, y); doc.text(fmtN(loc.totalReviewCount), M+58, y)
+  y+=13; doc.text('Répartition des avis :', M+3, y); y+=7
+  const dd=loc.distribution||{}; const tot=[1,2,3,4,5].reduce((a,k)=>a+(dd[k]||0),0)||1
+  ;[5,4,3,2,1].forEach(k=>{
+    const cnt=dd[k]||0, pct=Math.round(cnt/tot*100), bx=M+26, bw=95
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...DARK); doc.text(k+(k>1?' étoiles':' étoile'), M+3, y+3)
+    doc.setFillColor(...LIGHT); doc.rect(bx,y,bw,4,'F'); doc.setFillColor(...STAR[k]); doc.rect(bx,y,bw*cnt/tot,4,'F')
+    doc.setTextColor(...DARK); doc.text(String(cnt), bx+bw+4, y+3.2)
+    doc.setFont('helvetica','normal'); doc.setTextColor(...GREY); doc.text('('+pct+' %)', bx+bw+20, y+3.2)
+    y+=9
+  })
+  footer(1)
+
+  // PAGE 2
+  doc.addPage(); header("Fiche d'audit — établissement"); y=44; y=band(y,'Avis clients (suite)',PURPLE)
+  ;[['Avis avec réponse :', (loc.replied||0)+' / '+fmtN(loc.fetchedCount)],
+    ['Taux de réponse :', (loc.responseRate||0)+' %'],
+    ['Avis négatifs (3 étoiles ou moins) sans réponse :', (loc.negativeNoReply||0)+' avis']].forEach(([k,v])=>{
+    doc.setFillColor(252,235,240); doc.rect(M,y,W-2*M,9,'F')
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...DARK); doc.text(k,M+3,y+6)
+    doc.setTextColor(...RED); doc.text(v, M+95, y+6); y+=12
+  })
+  y+=4
+  if((loc.negativeNoReply||0)>0){
+    doc.setDrawColor(...RED); doc.setLineWidth(0.4); doc.rect(M,y,W-2*M,18)
+    doc.setTextColor(...RED); doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Point critique :', M+3, y+7)
+    doc.setTextColor(...DARK); doc.setFont('helvetica','normal'); doc.setFontSize(9)
+    doc.text((loc.replied||0)+' réponse(s) sur '+fmtN(loc.fetchedCount)+' avis analysés.', M+40, y+7)
+    doc.setTextColor(...GREY); doc.setFont('helvetica','italic')
+    doc.text(loc.negativeNoReply+' avis négatif(s) sans réponse nuisent à la réputation.', M+3, y+14)
+    y+=26
+  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...DARK); doc.text('Synthèse & actions prioritaires', M, y+4); y+=9
+  const synth = `Note de ${note} / 5 — ${fmtN(loc.totalReviewCount)} avis au total. Taux de réponse : ${loc.responseRate||0} % (${loc.replied||0} réponses sur ${fmtN(loc.fetchedCount)} avis analysés). ${loc.negativeNoReply||0} avis négatif(s) sans réponse à traiter en priorité.`
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...DARK)
+  const sl=doc.splitTextToSize(synth, W-2*M-8); doc.setFillColor(238,243,251); doc.rect(M,y,W-2*M, sl.length*5+8,'F'); doc.text(sl, M+4, y+7)
+  footer(2)
+
+  // PAGE 3 & 4
+  doc.addPage(); header("Analyse des avis — points positifs"); y=44; y=band(y,'Points positifs — ce que les clients apprécient',GREEN)
+  avisPdfThemes(doc, loc.positive, GREEN, y, W, M); footer(3)
+  doc.addPage(); header("Analyse des avis — points négatifs"); y=44; y=band(y,'Points négatifs — ce qui freine la satisfaction',RED)
+  avisPdfThemes(doc, loc.negative, RED, y, W, M); footer(4)
+
+  const clean=(loc.title||pdv.nom||'audit').replace(/[^a-zA-Z0-9-_]/g,'_')
+  doc.save('Audit_Google_'+clean+'_'+dateStr.replace(/\//g,'-')+'.pdf')
+}
+
+function avisPdfThemes(doc, data, color, y, W, M){
+  const themes=(data&&data.themes)||[]
+  if(!themes.length){ doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110,110,110); doc.text('Aucun point récurrent détecté sur les avis analysés.', M+3, y+4); return }
+  const max=themes[0].count||1
+  themes.forEach(t=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(26,26,26); doc.text(t.key, M+3, y+3)
+    doc.setTextColor(...color); doc.setFontSize(9); doc.text(t.count+' mention'+(t.count>1?'s':''), W-M-3, y+3, {align:'right'})
+    y+=5
+    const bw=W-2*M-3; doc.setFillColor(238,238,238); doc.rect(M+3,y,bw,3,'F'); doc.setFillColor(...color); doc.rect(M+3,y,bw*t.count/max,3,'F')
+    y+=6
+    const raw=(t.samples&&t.samples[0])?pdfClean(t.samples[0].text):''
+    const s=raw?'« '+raw+' »':''
+    if(s){ doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(95,95,95)
+      const ln=doc.splitTextToSize(s, W-2*M-6).slice(0,3); doc.text(ln, M+3, y+3); y+=ln.length*4+2 }
+    y+=5
+  })
 }
 
 function avisThemeSub(data, bucket) {
@@ -1459,6 +1570,9 @@ function avisThemeRows(data, color) {
 }
 
 function avisGoogleBody(loc, ts) {
+  const exportBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+    <button class="btn btn-primary" onclick="exportAvisPDF()" style="background:var(--green);color:#fff;border-color:var(--green)">⬇ Audit PDF</button>
+  </div>`
   const d = loc.distribution || {}
   const totalDist = [1,2,3,4,5].reduce((a,k)=>a+(d[k]||0),0) || 1
   const bar = k => {
@@ -1480,6 +1594,7 @@ function avisGoogleBody(loc, ts) {
     </div>`).join('') || '<p class="empty">Aucun avis récent.</p>'
 
   return `
+    ${exportBtn}
     <div class="kgrid" style="margin-bottom:1.25rem">
       <div class="kc"><div class="kl">Note moyenne</div><div class="kv">${loc.averageRating?loc.averageRating.toFixed(1).replace('.',','):'—'} <span style="font-size:14px">${avisStars(loc.averageRating)}</span></div><div class="ks">${escHtml(loc.title)}</div></div>
       <div class="kc"><div class="kl">Nombre d'avis</div><div class="kv">${fmt(loc.totalReviewCount)}</div></div>
