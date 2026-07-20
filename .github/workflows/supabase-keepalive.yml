@@ -1,0 +1,16 @@
+name: Supabase keep-alive
+on:
+  schedule:
+    - cron: '0 7 * * *'   # tous les jours à 07:00 UTC
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (REST)
+        run: |
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZGFndXdjcHlwY21qcGt4cGJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NDk2OTUsImV4cCI6MjA5MjMyNTY5NX0.GIcXljp3p4YHIJI5vWzc_vY8xglu_rhit1cWZ1U5WHo"
+          URL="https://kndaguwcpypcmjpkxpbw.supabase.co/rest/v1/etablissements?select=id&limit=1"
+          CODE=$(curl -s -o /tmp/o -w "%{http_code}" --max-time 30 "$URL" -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+          echo "HTTP $CODE"; cat /tmp/o
+          [ "$CODE" = "200" ] || { echo "::warning::Supabase a répondu $CODE"; exit 1; }
