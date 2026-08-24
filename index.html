@@ -767,6 +767,7 @@ function detectType(name, dateStop) {
   if(has('fuego latino')) return 'Soirée'
   if(has('inauguration')) return 'Soirée'
   if(has('copacabana')) return 'Soirée'
+  if(has('blanche') || has('white')) return 'Soirée'
   if(has('party') && !has('karaoke') && !has('crush')) return 'Soirée' // 5
   if(has('blind test')) return (isTue || isWed) ? 'Apéro Quiz' : 'Blind test' // 6
   if(isTue) return 'Apéro Quiz'                                        // 7
