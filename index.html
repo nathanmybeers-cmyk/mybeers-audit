@@ -707,6 +707,7 @@ const TYPE_DEFS = [
   {label:'Sport',         keys:['vs ','versus','match','foot','rugby','ligue','league','⚽','🏉','🆚']},
   {label:'Flash Tattoo',  keys:['tattoo','tatou','tatouage']},
   {label:'Poker',         keys:['poker']},
+  {label:'Apéro Huîtres', keys:['huître','huitre']},
 ]
 
 // Couleurs par type (badge class)
@@ -716,6 +717,7 @@ const TYPE_COLORS = {
   'Karaoke':       'bg', 'Sport':         'bg', 'Crush':       'bg',
   'SBK':           'bg', 'Comedy Club':   'bg', 'Flash Tattoo':'bg', 'Poker': 'bg',
   'Saint-Patrick': 'bg',
+  'Apéro Huîtres': 'ba',
   'Blind test':    'bpu',
   'Soirée':        'br',
   'Divers':        'bb',
@@ -745,7 +747,11 @@ function normalizeUnicode(s) {
   })
 }
 
+// Ordre d'affichage des filtres : alphabétique, « Apéro Huîtres » toujours en dernier
+const sortTypes = arr => [...arr].sort((a,b)=>(a==='Apéro Huîtres')-(b==='Apéro Huîtres')||a.localeCompare(b))
+
 // Détection du type — ordre de priorité (le 1er qui matche gagne) :
+//  0. « Huître(s) » (avec ou sans accent) → Apéro Huîtres (priorité absolue)
 //  1. Sport (🆚, ⚽…)                        5. « Party » (sauf Karaoke/Crush) → Soirée
 //  2. 17 mars → Saint-Patrick                6. « Blind test » (hors mardi/mercredi)
 //  3. « Quiz » → Apéro Quiz                  7. Mardi non-sport → Apéro Quiz
@@ -759,6 +765,7 @@ function detectType(name, dateStop) {
   const isTue = dow===2, isWed = dow===3
   const isMar17 = !!d && d.getMonth()===2 && d.getDate()===17
 
+  if(has('huitre')) return 'Apéro Huîtres'                             // 0
   const SPORT = (TYPE_DEFS.find(t=>t.label==='Sport')||{}).keys || []
   if(SPORT.some(has)) return 'Sport'                                   // 1
   if(isMar17) return 'Saint-Patrick'                                   // 2
@@ -1769,7 +1776,7 @@ function renderAdsTab(data, pdv, allData) {
   if(!filtered.length) return periodSel+`<div class="card"><p class="empty">Aucune publicité sur la période sélectionnée.</p></div>`
 
   const allRows = computeTypes(filtered)
-  const allTypes = [...new Set(allRows.map(r=>r._type))].sort()
+  const allTypes = sortTypes(new Set(allRows.map(r=>r._type)))
   const rows = currentTypeFilter ? allRows.filter(r=>r._type===currentTypeFilter) : allRows
 
   const typeFilterSel = `<div style="display:flex;gap:6px;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
@@ -2071,7 +2078,7 @@ function drawAdsChart(rows) {
     'Club Mix':'#EF9F27','Fléchettes':'#EF9F27',
     'Karaoke':'#2cb5b5','Sport':'#2cb5b5','Crush':'#2cb5b5',
     'SBK':'#2cb5b5','Comedy Club':'#2cb5b5','Flash Tattoo':'#2cb5b5','Poker':'#2cb5b5',
-    'Saint-Patrick':'#1a8a4a','Blind test':'#7F77DD',
+    'Saint-Patrick':'#1a8a4a','Blind test':'#7F77DD','Apéro Huîtres':'#EF9F27',
     'Soirée':'#E24B4A','Divers':'#378ADD',
   }
   const colors = labels.map(l=>colorMap[byType[l].type]||'#888')
@@ -2411,7 +2418,7 @@ function _compUpdateTypeBar(){
   if(!bar) return
   const allTypes=new Set()
   Object.values(_compResults).forEach(m=>{Object.keys(m.par_type||{}).forEach(t=>allTypes.add(t))})
-  const sorted=[...allTypes].sort()
+  const sorted=sortTypes(allTypes)
   bar.innerHTML=['Tous',...sorted].map(t=>{
     const isAll=t==='Tous'
     const active=_compTypeFilter===null&&isAll||_compTypeFilter===t
