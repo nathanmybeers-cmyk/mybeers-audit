@@ -1183,9 +1183,11 @@ async function loadAds(pdv, force, period) {
     const accountIds = pdv.ad_account_id.split(',').map(s => s.trim()).filter(Boolean)
 
     // Récupérer les campagnes de tous les comptes publicitaires
+    // (Meta exclut les archivées par défaut → sans ce filtre, une campagne archivée perd nom et dates)
+    const ST_ALL = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED","CAMPAIGN_PAUSED","ADSET_PAUSED","IN_PROCESS","WITH_ISSUES"]')
     let campaigns = []
     for (const accountId of accountIds) {
-      let curl = `${accountId}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&limit=100`
+      let curl = `${accountId}/campaigns?fields=id,name,start_time,stop_time,status,effective_status,daily_budget,lifetime_budget,budget_remaining,promoted_object{page_id}&effective_status=${ST_ALL}&limit=100`
       while(curl) {
         const d = await fetchMeta(curl, pdv.fb_token)
         campaigns = campaigns.concat(d.data||[])
@@ -1207,7 +1209,7 @@ async function loadAds(pdv, force, period) {
         // Phase 1 : ad sets — promoted_object.page_id (Facebook) ou instagram_profile_id (Instagram)
         for(const accountId of accountIds) {
           try {
-            let asurl = `${accountId}/adsets?fields=campaign_id,promoted_object{page_id,instagram_profile_id}&limit=200`
+            let asurl = `${accountId}/adsets?fields=campaign_id,promoted_object{page_id,instagram_profile_id}&effective_status=${ST_ALL}&limit=200`
             while(asurl) {
               const d = await fetchMeta(asurl, pdv.fb_token)
               ;(d.data||[]).forEach(as => {
@@ -1302,10 +1304,25 @@ async function loadAds(pdv, force, period) {
       }
     }
 
+    // Programmée en continu = au moins un ensemble de pubs sans date de fin (end_time absent)
+    const continuousIds = new Set()
+    for (const accountId of accountIds) {
+      let eurl = `${accountId}/adsets?fields=campaign_id,end_time&effective_status=${ST_ALL}&limit=500`
+      let guard = 0
+      while(eurl && guard++ < 20) {
+        try {
+          const d = await fetchMeta(eurl, pdv.fb_token)
+          ;(d.data||[]).forEach(as => { if(!as.end_time) continuousIds.add(as.campaign_id) })
+          eurl = d.paging?.next ? d.paging.next.replace(/https:\/\/graph\.facebook\.com\/v[\d.]+\//,'').replace(/&access_token=[^&]+/,'') : null
+        } catch(e){ console.warn('[continu] adsets:', e.message); break }
+      }
+    }
+
     const merged = insights.map(r => {
       const camp = campMap[r.campaign_id] || {}
       return {
         ...r,
+        _continuous: continuousIds.has(r.campaign_id),
         _platforms: [...(platMap[r.campaign_id] || [])],
         campaign_name: camp.name || r.campaign_id || '—',
         date_start: camp.start_time ? camp.start_time.split('T')[0] : null,
@@ -1880,11 +1897,13 @@ function renderAdsTab(data, pdv, allData) {
     // Statut de la campagne
     const today = new Date(); today.setHours(0,0,0,0)
     const stopDate = r.date_stop ? new Date(r.date_stop) : null
-    const isActive = r.status==='ACTIVE' && stopDate && stopDate >= today
+    const isActive = r.status==='ACTIVE' && (stopDate ? stopDate >= today : r._continuous)
     const statutBadge = isActive
       ? `<span class="badge bg">En cours</span>`
       : `<span style="font-size:11px;color:var(--tx3)">Terminé</span>`
-    const rowBg = isActive ? 'background:rgba(44,181,181,0.06)' : ''
+    const rowBg = r._continuous
+      ? 'background:var(--red-bg);color:var(--red-tx);font-weight:500'   // programmée en continu → ligne rouge
+      : isActive ? 'background:rgba(44,181,181,0.06)' : ''
     // Budget total avec badge coloré
     const budgetTotal = getBudgetTotal(r)
     let budgetDisplay = '—'
@@ -1953,7 +1972,7 @@ function renderAdsTab(data, pdv, allData) {
     return `<tr style="cursor:pointer;${rowBg}" onclick="toggleAudienceRow(this,'${r.campaign_id}','${pdv.id}')">
       <td>${statutBadge}</td>
       <td>${platBadge}</td>
-      <td class="tal" title="${r.campaign_name||''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
+      <td class="tal" title="${r.campaign_name||''}${r._continuous?' — programmée en continu (sans date de fin)':''}">${name}${(r.campaign_name||'').length>50?'…':''}</td>
       <td><span class="badge ${tc}">${type}</span></td>
       <td>${fmtD(r.date_start)}</td>
       <td>${fmtD(r.date_stop)}</td>
